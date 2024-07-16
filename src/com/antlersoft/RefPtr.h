@@ -105,7 +105,7 @@ template<class C> class RefPtr
 		{
 			if ( toAssign.holder)
 			{
-				dynamic_cast<C&>( *(toAssign.holder));
+				(void)dynamic_cast<C&>( *(toAssign.holder));
 
 				toAssign.holder->m__ReferenceCount++;
 			}

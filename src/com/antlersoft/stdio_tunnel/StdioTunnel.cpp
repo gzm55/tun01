@@ -219,19 +219,19 @@ namespace
 		tokenize( connect_params, string( arg), ':');
 		if ( connect_params.size()!=3 && connect_params.size()!=4)
 		{
-			throw MY_EXCEPTION( static_cast<stringstream&>(
+			throw MY_EXCEPTION( static_cast<const stringstream&>(
 				stringstream()<<"Bad connection argument: "<<arg).str().c_str());
 		}
 		int listen_port=atoi( connect_params[0].c_str());
 		if ( listen_port<=0)
 		{
-			throw MY_EXCEPTION( static_cast<stringstream&>(
+			throw MY_EXCEPTION( static_cast<const stringstream&>(
 				stringstream()<<"Bad listen port: "<<connect_params[0].c_str()).str().c_str());
 		}
 		int connect_port=atoi( connect_params[2].c_str());
 		if ( connect_port<=0)
 		{
-			throw MY_EXCEPTION( static_cast<stringstream&>(
+			throw MY_EXCEPTION( static_cast<const stringstream&>(
 				stringstream()<<"Bad connect port: "<<connect_params[2].c_str()).str().c_str());
 		}
 		ConnectionSpec result;
@@ -494,9 +494,10 @@ void StdioTunnelLocal::start()
 	}
 	else
 	{
+		char shellopt[] = "-c";
 		char* argv[4];
 		argv[0]=getenv( "SHELL");
-		argv[1]="-c";
+		argv[1]=shellopt;
 		argv[2]=const_cast<char*>( m_command.c_str());
 		argv[3]=static_cast<char*>(0);
 		// execl doesn't work on cygwin
@@ -631,6 +632,8 @@ void StdioTunnelLocal::polled( Poller& poller, pollfd& poll_struct)
 			else
 				getPoller().removePolled( *this, STDOUT_FD);
 		}
+		break;
+	default : break;
 	}
 }
 
@@ -700,12 +703,13 @@ void StdioTunnelRemote::polled( Poller& poller, pollfd& poll_struct)
 					setShutdownByRequest();
 				}
 				else if ( command!=CMD_CONNECTION)
-					throw MY_EXCEPTION( static_cast<stringstream&>(stringstream()<<"Unexpected command: "<<command).str().c_str());
+					throw MY_EXCEPTION( static_cast<const stringstream&>(stringstream()<<"Unexpected command: "<<command).str().c_str());
 				else
 				{
 					m_connection_map[getReader().readShort()]->processMessage( *this);
 				}
 				break;
+			default : break;
 			}
 		}
 	}
@@ -887,7 +891,7 @@ void ListenSide::processMessage( StdioTunnel& tunnel)
 	map<short,ConnectionLinkPtr>::iterator it=m_link_map.find( link_id);
 	if ( it==m_link_map.end())
 	{
-		throw MY_EXCEPTION( static_cast<stringstream&>(stringstream()<<"Link: "<<link_id<<" not found").str().c_str());
+		throw MY_EXCEPTION( static_cast<const stringstream&>(stringstream()<<"Link: "<<link_id<<" not found").str().c_str());
 	}
 	ConnectionLinkPtr link=it->second;
 	switch ( cmd)

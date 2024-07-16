@@ -177,7 +177,7 @@ protected :
 	virtual ~StdioTunnel();
 
 	void setShutdownByRequest()
-	{ m_closed_by_request==true; }
+	{ m_closed_by_request=true; }
 
 	/** String transmitted from remote to local to kick off handshake */
 	std::string m_magic_string;
