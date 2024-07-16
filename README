@@ -1,0 +1,45 @@
+StdioTunnel allows you to tunnel arbitrary TCP connections through
+any connection that approximates a tty with a clear 8-bit data path.
+In this sense it provides the same kind of functionality as ppp, but for a
+limited, fixed set of connections; it doesn't require any routing changes
+on either end of the connection.  It tunnels the connections in much the
+same way that ssh(1) does, but is useful in particular cases where ssh
+port-forwarding has been disabled, and it does not require running or
+changing the configuration of any servers at either end of the connection.
+
+An example might make things clearer.  Suppose you are on machine A
+and you want to make use of connection-oriented services on machine B.
+A firewall in the environment of A prohibits any sort of direct connection
+with B; however, you can access machine X through ssh from A, and you can
+connect from X to B.  You can get a login session on B from A by first
+ssh'ing to X and then ssh'ing from X to B.  You would like to use ssh
+port-forwarding to access services on B, but the ssh daemon on X, over
+which you have no control, is configured to disallow port forwarding.
+It is in this circumstance (however rare it might be) that StdioTunnel
+is useful.  You start the local end of StdioTunnel on A, using the command
+line to specify the ports you would like to forward when the connection
+is complete.  StdioTunnel starts a process you specify (such as ssh); you
+use this process to connect to your destination machine.  In the example
+case, you would use ssh to log in to X, and then connect from X to B.
+Once logged in to B, you would start the remote side of StdioTunnel;
+the two sides would handshake over the connection you established,
+and you could commence using the ports forwarded through the tunnel.
+
+Once StdioTunnel handshakes, the connection you used to initiate it is
+no longer available.  The local StdioTunnel process will ignore further
+input.  The connection is shut down when you kill the StdioTunnel process
+at either end.
+
+All that is required for StdioTunnel to make a connection is that the
+standard input and output of the remote side appear to be connected
+through an 8-bit clear channel to the standard input and output of the
+process started by the local side.  ssh with the -e none option to turn
+off the escape character works quite nicely as the connecting process.
+
+Please note that using ANY software, StdioTunnel included, to work-around
+firewall restrictions may make systems on either side of the firewall
+more vulnerable to any number of attacks.  StdioTunnel may have bugs that
+make such vulnerabilities even worse.  The user takes sole responsibility
+for any adverse consequences of using this software.
+
+Suggestions: mars@antlersoft.com

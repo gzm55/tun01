@@ -1,0 +1,241 @@
+<!DOCTYPE refentry SYSTEM "file:///opt/kde/share/apps/ksgmltools2/docbook/xml-dtd-4.1.2/docbookx.dtd" [
+]>
+<refentry>
+  <refmeta>
+    <refentrytitle>StdioTunnel</refentrytitle>
+    <manvolnum>1</manvolnum>
+  </refmeta>
+  <refnamediv>
+    <refname>StdioTunnel</refname>
+    <refpurpose>multiplex arbitrary TCP connections over the
+standard input/output of a connecting process</refpurpose>
+  </refnamediv>
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>StdioTunnel</command>
+      <arg choice="opt"><option>-l</option></arg>
+      <arg choice="opt"><option>-D</option></arg>
+      <arg choice="opt"><option>-V</option></arg>
+      <arg choice="opt"><option>-t</option></arg>
+      <arg choice="opt"><option>-T</option></arg>
+      <group rep="repeat"><arg><option>-L</option></arg><arg><option>-R</option></arg> <replaceable>connection-spec</replaceable></group>
+      <arg choice="req"><option>-e</option> <replaceable>connection command</replaceable></arg>
+      <sbr/><sbr/>
+<command>StdioTunnel</command>
+      <arg choice="req"><option>-r</option></arg>
+      <arg><option>-D</option></arg>
+      <arg><option>-V</option></arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+  <refsect1>
+    <title>Description</title>
+	<simpara>Sometimes, you can get a connection to a remote host that
+gives you command-line access, as with ssh, but nothing else.
+You'd like to use different kinds of connection-oriented protocols between
+your machine and the remote host, such as vnc or imap.  ssh provides
+the option of forwarding TCP ports for such purposes, but sometimes
+this facility is disabled.  You might also create a ppp link over
+such a connection, but you might lack permissions on one
+end or the other required to do so.  It is in this circumstance
+(however rare it may be) that StdioTunnel is useful.  It
+assumes nothing more than that you can run a command (such as rsh, ssh or
+telnet) on
+your local machine that will give command-line access to (technically,
+an 8-bit clear path to the standard input and standard output
+or a process on)
+a remote machine, and that StdioTunnel exists on both machines.
+If you can get command-line access,
+you can use StdioTunnel to do TCP port forwarding.</simpara>
+    <simpara>The StdioTunnel command takes two forms, one on the local (originating) side of the connection and one on the remote.</simpara>
+    <refsect2>
+      <title>Local Side</title>
+      <simpara>You originate a StdioTunnel connection with the Local form; the local form is indicated with the <option>-l</option> but this may be omitted
+because it is the default.  You will also need to supply one or more
+<replaceable>connection-spec</replaceable> arguments to specify
+the TCP connections that StdioTunnel will carry.
+These arguments are designed to be familiar to those
+who have used the port forwarding capabilities of
+<application>ssh</application>.</simpara>
+<simpara>The <replaceable>connection-spec</replaceable>
+consists of three or four fields separated by colons (:) in the form
+<replaceable>listen port</replaceable>:<replaceable>connect host</replaceable>:<replaceable>connect port</replaceable><optional>:<replaceable>flag characters</replaceable></optional>.</simpara>
+<simpara>You can use the arguments to define any number of either of two kinds of connections:</simpara>
+      <variablelist>
+	<varlistentry>
+	  <term><option>-L</option> <replaceable>connection-spec</replaceable></term>
+	  <listitem>
+	    <simpara>These connections will forward the <replaceable>listen port</replaceable> on the local machine, listening for connection attempts to that port.  When a connection is made,
+StdioTunnel will attempt to forward the connection, connecting from the remote machine to <replaceable>connect port</replaceable> on the host specified by <replaceable>connect host</replaceable>.</simpara>
+	  </listitem>
+	</varlistentry>
+	<varlistentry>
+	  <term><option>-R</option> <replaceable>connection-spec</replaceable></term>
+	  <listitem>
+	    <simpara>These connections will forward the <replaceable>listen port</replaceable> on the remote machine, listening at the remote machine for connection attempts to that port.  When a connection is made,
+StdioTunnel will attempt to forward the connection
+to the local machine, connecting from the local machine to <replaceable>connect port</replaceable> on the host specified by <replaceable>connect host</replaceable>.</simpara>
+	  </listitem>
+	</varlistentry>
+      </variablelist>
+      <simpara>A <replaceable>connection-spec</replaceable>
+may also have <replaceable>flag characters</replaceable>,
+single characters appearing in the optional
+fourth part of the <replaceable>connection-spec</replaceable>.  The supported flags are:</simpara>
+      <variablelist>
+	<varlistentry>
+	  <term><option>a</option></term>
+	  <listitem>
+	    <simpara>This flag--for [a]cknowledge--adds
+handshaking to all data transfers over the defined connection,
+greatly increasing latency but overcoming problems with some
+connections on some platforms.</simpara>
+	  </listitem>
+	</varlistentry>
+	    <varlistentry>
+	      <term><option>p</option></term>
+	      <listitem>
+		<simpara>Normally, when StdioTunnel creates
+a listen port, it binds it only to the loopback address, so
+connections may be made to it only from the host on which
+StdioTunnel is running.  This flag--for [p]romiscuous--binds
+the port to any incoming address, so StdioTunnel will forward
+connection attempts from any host.  This is an even bigger
+security risk than the normal operation of StdioTunnel, so this flag
+should be used with care.</simpara>
+<simpara>
+<emphasis>Note: </emphasis>
+On some platforms (i.e., Mac OS/X) binding to the loopback address
+does not appear to work, so you <emphasis>must</emphasis> specify promiscuous for
+any connection that is to listen on that platform.
+</simpara>
+	      </listitem>
+	    </varlistentry>
+      </variablelist>
+	  <simpara>In addition to the connection definitions,
+when starting the local StdioTunnel you must use the <option>-e</option>
+to specify a <replaceable>connection command</replaceable>.  The <replaceable>conection command</replaceable>
+is a single argument that is interpreted as a complete command line,
+so make sure it is quoted properly.
+The command line is passed to your shell;
+the resulting process runs as if you had started it directly
+from your command line.  Before passing it to you, StdioTunnel
+reads the process' output, looking for the handshaking string
+from the remote side of StdioTunnel.</simpara>
+	  <simpara>Whatever <replaceable>connection command</replaceable>
+you specify, it is very important that it provide an 8-bit clear
+data path.  If the connection allows for any escape characters
+to trigger special behavior, the escapes will interfere with
+the StdioTunnel data passed over the connection.  For the <application>telnet</application> command, you might specify the <option>-8</option> <option>-E</option>
+flags; for the <application>ssh</application>, the <option>-e none</option> flag.</simpara>
+	  <refsect3>
+	    <title>Other options</title>
+	    <variablelist>
+	      <varlistentry>
+		<term><option>-t</option></term>
+		<listitem>
+		  <simpara>By default,
+StdioTunnel communicates with the connection command
+through a pseudo-tty.  Some commands may not
+expect to be communicating through a tty device
+and may not set the terminal modes correctly; this flag
+instructs StdioTunnel to compensate for such commands.</simpara>
+		</listitem>
+	      </varlistentry>
+	      <varlistentry>
+		<term><option>-T</option></term>
+		<listitem>
+		  <simpara>As mentioned, StdioTunnel normally
+connects to the <replaceable>connection command</replaceable>
+through a pseudo-tty.  This option forces StdioTunnel to use
+pipes instead.</simpara>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect3>
+    </refsect2>
+	<refsect2>
+	  <title>Remote Side</title>
+	  <simpara>After you've connected to the remote machine,
+you must start StdioTunnel there with the <option>-r</option>
+in order to start the remote side of the connection.  The
+two StdioTunnel processes will perform a simple handshake
+over the connection and if successful they will be able
+to do the TCP port forwarding specified on the Local Side command
+line.</simpara>
+	</refsect2>
+	<refsect2>
+	  <title>Common Flags</title>
+	  <variablelist>
+	    <varlistentry>
+	      <term><option>-D</option></term>
+	      <listitem>
+		<simpara>Use this flag to put either side
+of StdioTunnel in debug mode.  In this mode, StdioTunnel will
+write a lot of debugging information to the standard error
+output; this will interfere with the connection unless
+the standard error is redirected.</simpara>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><option>-V</option></term>
+	      <listitem>
+		<simpara>Prints the version of StdioTunnel.</simpara>
+	      </listitem>
+	      </varlistentry>
+	  </variablelist>
+	</refsect2>
+  </refsect1>
+<refsect1>
+	<title>Examples</title>
+	<para><userinput>StdioTunnel -l -L 2001:localhost:22:a -L 5900:localhost:5900 -e "ssh -e none remotehost.remotedomain.com"</userinput></para>
+	<simpara>In this example StdioTunnel is initiating
+a connection to remotehost.remotedomain.com via <application>ssh</application>.
+The user is expected to start StdioTunnel -r on the remote host;
+after this, StdioTunnel will forward two local ports to the remote host:
+local port 2001 on the local host will be forwarded to port 22 (the <application>ssh</application>
+port) on the remotehost, and StdioTunnel will use extra
+handshaking on that connection;
+also, the 5900 port on the local host (<application>vnc</application> default port)
+will be forwarded to the same port on the remote host.</simpara>
+<para><userinput>StdioTunnel -r -D 2>stdiotunnel.log</userinput></para>
+	<simpara>Start the remote side of StdioTunnel with
+debugging turned on, sending the debugging output to <userinput>stdiotunel.log</userinput>.</simpara>
+	<para><userinput>StdioTunnel -l -t -R 2002:localhost:143:p -e "ssh remotehost.remotedomain.com StdioTunnel -r"</userinput></para>
+	<simpara>In this example StdioTunnel will forward a connection
+from any host to port 2002 on the remote host to
+port 143 on the local host.  Note that the connection command itself
+starts the remote side of StdioTunnel.</simpara>
+</refsect1>
+  <refsect1>
+    <title>Environment Variables</title>
+	<variablelist>
+	  <varlistentry>
+	    <term><envar>SHELL</envar></term>
+	    <listitem>
+	      <simpara>StdioTunnel passes the <replaceable>connection command</replaceable>
+to the program specified by the SHELL environment variable.</simpara>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </refsect1>
+      <refsect1>
+      <title>Bugs</title>
+	<simpara>
+	On platforms that lack forkpty(3) (such as Solaris?) StdioTunnel
+	will always behave as if the -T flag is provided.  This can make
+	setting up the connection difficult.</simpara>
+      <simpara>
+      Some platforms, notable Mac OS/X, seem unable to bind solely to the
+      loopback address.  Any connection spec that is to listen on such
+      a platform must include the promiscuous flag or it won't work.
+      </simpara>
+      </refsect1>
+      <refsect1>
+      <title>Author</title>
+	<simpara>StdioTunnel and the StdioTunnel manpage are Copyright 2004,2005 by <ulink url="mailto:mars@antlersoft.com">Michael A. MacDonald</ulink>, licensed under the terms of the GNU General Public License.  All trademarks are the property of
+	their respective owners.</simpara>
+      </refsect1>
+</refentry>
+
+
+

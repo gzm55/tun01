@@ -1,0 +1,6 @@
+** - Version 0.2
+Many portability enhancements; should build and run on BSD's, Solaris, and Mac OS/X
+which it failed to before.  See the manual page for notes on platform limitations.
+Also, attempts to clean up after itself slightly more on shutdown.
+** - Version 0.1
+Initial version; crashes occasionally for mysterious reasons
