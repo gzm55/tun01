@@ -52,6 +52,7 @@
 #include "com/antlersoft/Trace.h"
 #include "com/antlersoft/tokenize.h"
 #include "StdioTunnel.h"
+#include "com/antlersoft/StderrEndl.h"
 
 using namespace std;
 using namespace com::antlersoft;
@@ -276,7 +277,7 @@ RefPtr<StdioTunnel> StdioTunnel::CreateTunnel( int argc, char* argv[])
 				Trace::setPrint( true);
 				break;
 			case 'V' :
-				cout<<PACKAGE_STRING<<endl;
+				cout<<PACKAGE_STRING<<cerr_endl()<<flush;
 				version=true;
 				break;
 			}
@@ -640,7 +641,7 @@ void StdioTunnelLocal::polled( Poller& poller, pollfd& poll_struct)
 void StdioTunnelLocal::reportError( string message)
 {
 	Trace trace( "StdioTunnelLocal::reportError");
-	cerr<<message.c_str()<<endl;
+	cerr<<message.c_str()<<cerr_endl()<<flush;
 }
 
 void StdioTunnelRemote::start()
@@ -1094,7 +1095,7 @@ void StdioTunnel::pollCallback( Poller& poller)
 
 int main( int argc, char* argv[])
 {
-	//Trace::setPrint( true);
+	Trace::setPrint( argc >= 2 && 0 == strcmp(argv[1], "-D"));
 	Trace trace( "main");
 
 	signal( SIGHUP, signalHandler);
@@ -1110,31 +1111,40 @@ int main( int argc, char* argv[])
 		}
 		catch ( MyException& e)
 		{
-			cerr<<"\r\nUsage: StdioTunnel [-l] <-L|-R <connection spec>>... -e <connection command>\r\n\n"
-			"or (on the remote side)\r\n\n"
-			"StdioTunnel -r\r\n\n"
-			"where connection_spec = <listen port>:<connect host>:<connect port>[:ap]\r\n";
+			cerr<<cerr_endl()
+				<<"Usage: StdioTunnel [-l] <-L|-R <connection spec>>... -e <connection command>"
+				<<cerr_endl()
+				<<cerr_endl()
+				<<"or (on the remote side)"
+				<<cerr_endl()
+				<<cerr_endl()
+				<<"StdioTunnel -r"
+				<<cerr_endl()
+				<<cerr_endl()
+				<<"where connection_spec = <listen port>:<connect host>:<connect port>[:ap]"
+				<<cerr_endl()
+				<<flush;
 			throw;
 		}
 		tunnel->startFinish();
 	}
 	catch ( const char* s)
 	{
-		cerr<<s<<endl;
+		cerr<<s<<cerr_endl()<<flush;
 	}
 	catch ( MyException& e)
 	{
-		cerr<<e.what()<<endl;
+		cerr<<e.what()<<cerr_endl()<<flush;
 	}
 	catch ( exception& std_exc)
 	{
-		cerr<<std_exc.what()<<endl;
+		cerr<<std_exc.what()<<cerr_endl()<<flush;
 	}
 	catch(...)
 	{
-		cerr<<"Unknown exception\n";
+		cerr<<"Unknown exception"<<cerr_endl()<<flush;
 	}
-	cerr<<"Normal exit\n";
+	cerr<<"Normal exit"<<cerr_endl()<<flush;
 
 	return 0;
 }

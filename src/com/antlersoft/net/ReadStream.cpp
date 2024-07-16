@@ -7,6 +7,7 @@
 #include "com/antlersoft/net/ReadStream.h"
 #include "com/antlersoft/MyException.h"
 #include "com/antlersoft/Trace.h"
+#include "com/antlersoft/StderrEndl.h"
 
 #ifdef COM_OUT
 #include <iostream>
@@ -18,7 +19,7 @@ using namespace com::antlersoft::net;
 bool ReadStream::available()
 {
 #ifdef COM_OUT
-cerr<<"Queue size "<<m_queue.size()<<" Queue contents: "<<endl;
+cerr<<"Queue size "<<m_queue.size()<<" Queue contents: "<<cerr_endl()<<flush;
 for ( deque<char>::iterator i=m_queue.begin(); i!=m_queue.end(); ++i)
 {
 	int ch= (*i) & 0xff;
@@ -32,7 +33,7 @@ for ( deque<char>::iterator i=m_queue.begin(); i!=m_queue.end(); ++i)
 	}
 	cerr<<",";
 }
-cerr<<endl;
+cerr<<cerr_endl()<<flush;
 #endif
 	return m_queue.size()!=0;
 }
@@ -97,7 +98,7 @@ void ReadStream::fill( pollfd& poll_struct)
 			if ( read_len==0)
 				throw MY_EXCEPTION( "End of file in ReadStream::fill");
 #ifdef COM_OUT
-cerr<<"Read size "<<read_len<<" read contents: "<<endl;
+cerr<<"Read size "<<read_len<<" read contents: "<<cerr_endl()<<flush;
 for ( int i=0; i!=read_len; ++i)
 {
 	int ch= m_read_buf[m_read_count+i];
@@ -111,7 +112,7 @@ for ( int i=0; i!=read_len; ++i)
 	}
 	cerr<<",";
 }
-cerr<<endl;
+cerr<<cerr_endl()<<flush;
 #endif
 			m_read_count+=read_len;
 			if ( m_read_count<4)
@@ -131,7 +132,7 @@ cerr<<endl;
 		read_len=read( poll_struct.fd, m_read_buf+m_read_count,
 			length+4-m_read_count);
 #ifdef COM_OUT
-cerr<<"Read size "<<read_len<<" read contents: "<<endl;
+cerr<<"Read size "<<read_len<<" read contents: "<<cerr_endl()<<flush;
 for ( int i=0; i!=read_len; ++i)
 {
 	int ch= m_read_buf[m_read_count+i];
@@ -145,7 +146,7 @@ for ( int i=0; i!=read_len; ++i)
 	}
 	cerr<<",";
 }
-cerr<<endl;
+cerr<<cerr_endl()<<flush;
 #endif
 		if ( read_len<0)
 		{

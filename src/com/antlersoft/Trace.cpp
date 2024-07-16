@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "com/antlersoft/Trace.h"
+#include "com/antlersoft/StderrEndl.h"
 
 using namespace std;
 
@@ -16,13 +17,13 @@ Trace::Trace( string s)
 {
 	scope_stack.push_front( s);
 	if ( print_it)
-		cerr<<"into "<<s<<endl;
+		cerr<<"into "<<s<<cerr_endl()<<flush;
 }
 
 Trace::~Trace()
 {
 	if ( print_it)
-		cerr<<"out of "<<scope_stack.front()<<endl;
+		cerr<<"out of "<<scope_stack.front()<<cerr_endl()<<flush;
 	scope_stack.pop_front();
 }
 
@@ -37,7 +38,7 @@ void Trace::getTrace()
 {
 	for ( deque<string>::iterator i=scope_stack.begin();
 		i!=scope_stack.end(); i++)
-		cerr<<"from "<<*i<<endl;
+		cerr<<"  from "<<*i<<cerr_endl()<<flush;
 }
 
 } }
