@@ -38,7 +38,7 @@ class RefPtrException : public std::exception
 public :
 	RefPtrException( const char* msg)
 	: m_what( msg) {}
-	virtual const char* what() { return m_what; }
+	virtual const char* what()  const _NOEXCEPT { return m_what; }
 };
 
 template<class C> class RefPtr

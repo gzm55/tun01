@@ -104,7 +104,7 @@ void CustomWriteStream::send()
 }
 
 ConnectionLink::ConnectionLink( TunnelConnection& connection, short id, int socket)
-: m_connection( connection), m_id( id), m_socket( socket), m_acknowledged( true ), m_closing( false)
+: m_connection( connection), m_socket( socket), m_id( id), m_closing( false), m_acknowledged( true )
 {
 }
 
@@ -147,7 +147,7 @@ void ConnectionLink::setPollfd( pollfd& poll_struct)
 	poll_struct.events=POLLIN;
 }
 
-void ConnectionLink::cleanup( pollfd& poll_struct)
+void ConnectionLink::cleanup( pollfd&)
 {
 	Trace trace( "ConnectionLink::cleanup");
 	close( m_socket);
@@ -264,7 +264,6 @@ RefPtr<StdioTunnel> StdioTunnel::CreateTunnel( int argc, char* argv[])
 		char* arg=argv[i];
 		if ( arg[0]=='-')
 		{
-			bool long_arg=( arg[1]!=0 || i+1==argc);
 			switch ( arg[1])
 			{
 			case 'l' :
@@ -293,7 +292,7 @@ RefPtr<StdioTunnel> StdioTunnel::CreateTunnel( int argc, char* argv[])
 	return tunnel;
 }
 
-void StdioTunnel::configure( int argc, char* argv[])
+void StdioTunnel::configure( int, char*[])
 {
 	Trace trace( "StdioTunnel::configure");
 }
@@ -304,7 +303,7 @@ MagicStringDetector::MagicStringDetector( StdioTunnelLocal& tunnel,
 {
 }
 
-void MagicStringDetector::processReadData( char* buffer, int& count, int max_length)
+void MagicStringDetector::processReadData( char* buffer, int& count, int)
 {
 	Trace trace( "MagicStringDetector::processReadData");
 	for ( int i=0; i<count; ++i)
@@ -312,7 +311,7 @@ void MagicStringDetector::processReadData( char* buffer, int& count, int max_len
 		if ( buffer[i]==m_magic_string[m_recognized_count])
 		{
 			m_recognized_count++;
-			if ( m_recognized_count>=m_magic_string.length())
+			if ( m_recognized_count>=(int)m_magic_string.length())
 			{
 				m_tunnel.startHandshaking();
 				return;
@@ -539,7 +538,7 @@ void StdioTunnelLocal::setPollfd( pollfd& poll_struct)
 	}
 }
 
-void StdioTunnelLocal::polled( Poller& poller, pollfd& poll_struct)
+void StdioTunnelLocal::polled( Poller&, pollfd& poll_struct)
 {
 	Trace trace( "StdioTunnelLocal::polled");
 	switch ( m_state)
@@ -647,7 +646,7 @@ void StdioTunnelLocal::reportError( string message)
 void StdioTunnelRemote::start()
 {
 	Trace trace( "StdioTunnelRemote::start");
-	if ( write( STDOUT_FD, m_magic_string.c_str(), m_magic_string.length())!=m_magic_string.length())
+	if ( write( STDOUT_FD, m_magic_string.c_str(), m_magic_string.length())!=(ssize_t)m_magic_string.length())
 		throw MY_EXCEPTION_ERRNO;
 	if ( fcntl( STDIN_FD, F_SETFL, O_NONBLOCK)== -1 || fcntl( STDOUT_FD, F_SETFL, O_NONBLOCK)== -1)
 		throw MY_EXCEPTION_ERRNO;
@@ -659,7 +658,7 @@ void StdioTunnelRemote::start()
 	m_poller.start();
 }
 
-void StdioTunnelRemote::polled( Poller& poller, pollfd& poll_struct)
+void StdioTunnelRemote::polled( Poller&, pollfd& poll_struct)
 {
 	Trace trace( "StdioTunnelRemote::polled");
 	if ( poll_struct.fd==STDIN_FD)
@@ -947,7 +946,7 @@ bool ListenSide::initialize()
 	return result;
 }
 
-void ListenSide::polled( Poller& poller, pollfd& poll_struct)
+void ListenSide::polled( Poller&, pollfd&)
 {
 	Trace trace( "ListenSide::polled");
 
@@ -975,7 +974,7 @@ void ListenSide::setPollfd( pollfd& poll_struct)
 	poll_struct.events=POLLIN;
 }
 
-void ListenSide::cleanup( pollfd& poll_struct)
+void ListenSide::cleanup( pollfd&)
 {
 	close( m_listen_socket);
 }
@@ -1077,7 +1076,7 @@ namespace {
 
 bool g_signaled=false;
 
-void signalHandler( int sig)
+void signalHandler( int)
 {
 	g_signaled=true;
 }

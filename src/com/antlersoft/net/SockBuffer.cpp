@@ -12,7 +12,7 @@ using namespace com::antlersoft::net;
 
 SockBuffer::SockBuffer()
 	: 
-	m_output_position(BUFFER_SIZE), m_output_buf( new char[BUFFER_SIZE])
+	m_output_buf( new char[BUFFER_SIZE]), m_output_position(BUFFER_SIZE)
 {
 	Trace trace( "SockBuffer::SockBuffer");
 }
@@ -55,7 +55,7 @@ int SockBuffer::writeData( int write_fd)
 	{
 		// Refill output buffer
 		int fill_size=m_queue.size();
-		if ( fill_size>BUFFER_SIZE)
+		if ( fill_size>(int)BUFFER_SIZE)
 			fill_size=BUFFER_SIZE;
 		m_output_position-=fill_size;
 		for ( ; fill_size>0; fill_size--)
@@ -74,11 +74,11 @@ int SockBuffer::writeData( int write_fd)
 	return write_count;
 }
 
-void SockBuffer::processReadData( char* bytes, int& length, int max_length)
+void SockBuffer::processReadData( char*, int&, int)
 {
 }
 
-void SockBuffer::processWrittenData( char* bytes, int length)
+void SockBuffer::processWrittenData( char*, int)
 {
 }
 

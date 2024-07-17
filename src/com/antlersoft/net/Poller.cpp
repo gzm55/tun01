@@ -75,13 +75,13 @@ int poll( pollfd* pollfds, unsigned int nfds, int timeout)
 using namespace std;
 using namespace com::antlersoft::net;
 
-void Polled::cleanup( pollfd& poll_struct)
+void Polled::cleanup( pollfd& )
 {
 }
 
 Poller::Poller()
-: m_timeout( -1), m_finishing( false), m_pollfds( new pollfd[INITIAL_SIZE]),
-m_size(INITIAL_SIZE), m_callback( static_cast<PollCallback*>(0))
+: m_pollfds( new pollfd[INITIAL_SIZE]), m_size(INITIAL_SIZE), m_timeout( -1),
+m_finishing( false), m_callback( static_cast<PollCallback*>(0))
 {
 }
 
@@ -148,7 +148,7 @@ void Poller::start()
 		if ( m_callback!=static_cast<PollCallback*>( 0))
 			m_callback->pollCallback( *this);
 	}
-	for (m_index=0; m_index<m_polled.size(); m_index++)
+	for (m_index=0; m_index<(int)m_polled.size(); m_index++)
 	{
 		m_polled[m_index]->m_polled->cleanup( m_polled[m_index]->m_pollfd);
 	}
@@ -186,7 +186,6 @@ vector<Poller::PolledAndPollfdPtr>::iterator Poller::findPolled( Polled& to_find
 	{
 		if ( (*i)->m_polled== &to_find)
 		{
-			int index=i-m_polled.begin();
 			if ( (*i)->m_pollfd.fd==fd)
 			{
 				break;

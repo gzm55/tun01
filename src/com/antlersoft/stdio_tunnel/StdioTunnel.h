@@ -254,7 +254,7 @@ protected :
 	void configure( int argc, char* argv[]);
 public :
 	StdioTunnelLocal()
-	: m_read_buffer( *this, m_magic_string), m_read_fd( -1), m_write_fd( -1), m_state( INITIAL), m_force_pipe( false), m_expects_pipe( false)
+	: m_state( INITIAL), m_read_fd( -1), m_write_fd( -1), m_force_pipe( false), m_expects_pipe( false), m_read_buffer( *this, m_magic_string)
 	{}
 	void start();
 	void reportError( std::string message);

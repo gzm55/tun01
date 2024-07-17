@@ -19,8 +19,8 @@ private :
 public :
 	ReadStream()
 		: 
-		m_read_size( BUFFER_SIZE),
 		m_read_buf( new char[BUFFER_SIZE]),
+		m_read_size( BUFFER_SIZE),
 		m_read_count(0)
 	{
 	}
