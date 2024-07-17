@@ -24,7 +24,14 @@ AC_CHECK_HEADERS([fcntl.h netdb.h netinet/in.h stdlib.h sys/socket.h termios.h u
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
-AC_CHECK_TYPE( socklen_t,,[AC_DEFINE([socklen_t],[int],[likely type for missing typedef])])
+AC_CHECK_TYPE( socklen_t,,[AC_DEFINE([socklen_t],[int],[likely type for missing typedef])],
+	[#ifdef HAVE_UNISTD_H
+	 #  include <unistd.h>
+	 #endif
+	 #if HAVE_SYS_SOCKET_H
+	 #  include <sys/socket.h>
+	 #endif
+	])
 
 # Checks for library functions.
 AC_TYPE_SIGNAL

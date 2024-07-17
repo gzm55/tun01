@@ -933,7 +933,7 @@ bool ListenSide::initialize()
 	m_listen_socket=socket( PF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if ( m_listen_socket>=0)
 	{
-		if ( bind( m_listen_socket, (const sockaddr*)&saddr, sizeof( saddr))==0)
+		if ( ::bind( m_listen_socket, (const sockaddr*)&saddr, sizeof( saddr))==0)
 		{
 			if ( fcntl( m_listen_socket, F_SETFL, O_NONBLOCK)>=0)
 			{
