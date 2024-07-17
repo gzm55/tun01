@@ -22,23 +22,20 @@
 //////////////////////////////////////////////////////////////////////
 
 #if !defined(AFX_REFOBJECT_H__6AE34B36_FA14_49CF_956E_6C0F4BE6164C__INCLUDED_)
-#define AFX_REFOBJECT_H__6AE34B36_FA14_49CF_956E_6C0F4BE6164C__INCLUDED_
+#  define AFX_REFOBJECT_H__6AE34B36_FA14_49CF_956E_6C0F4BE6164C__INCLUDED_
 
-#if _MSC_VER > 1000
-#pragma once
-#endif // _MSC_VER > 1000
+#  if _MSC_VER > 1000
+#    pragma once
+#  endif  // _MSC_VER > 1000
 
-//namespace com { namespace antlersoft {
+// namespace com { namespace antlersoft {
 
-class RefObject  
-{
-public:
-	unsigned m__ReferenceCount;
-	RefObject()
-		: m__ReferenceCount( 0)
-	{}
-	virtual ~RefObject();
+class RefObject {
+ public:
+  unsigned m__ReferenceCount;
+  RefObject() : m__ReferenceCount(0) {}
+  virtual ~RefObject();
 };
 //} /* namespace antlersoft */ } /* namespace com */
 
-#endif // !defined(AFX_REFOBJECT_H__6AE34B36_FA14_49CF_956E_6C0F4BE6164C__INCLUDED_)
+#endif  // !defined(AFX_REFOBJECT_H__6AE34B36_FA14_49CF_956E_6C0F4BE6164C__INCLUDED_)

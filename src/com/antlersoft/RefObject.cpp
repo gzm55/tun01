@@ -22,7 +22,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #if _MSC_VER > 1000
-#include "stdafx.h"
+#  include "stdafx.h"
 #endif
 #include "RefObject.h"
 
@@ -30,7 +30,4 @@
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-RefObject::~RefObject()
-{
-
-}
+RefObject::~RefObject() {}

@@ -3,15 +3,16 @@
 
 #include <string>
 
-namespace com { namespace antlersoft {
-class Trace
-{
-public :
-	Trace( std::string scope_name);
-	~Trace();
-	static bool setPrint( bool to_print);
-	static void getTrace();
-};
-} }
+namespace com {
+namespace antlersoft {
+  class Trace {
+   public:
+    Trace(std::string scope_name);
+    ~Trace();
+    static bool setPrint(bool to_print);
+    static void getTrace();
+  };
+}  // namespace antlersoft
+}  // namespace com
 
 #endif
