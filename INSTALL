@@ -180,3 +180,10 @@ operates.
      script, and exit.
 
 `configure' also accepts some other, not widely useful, options.
+
+New Commands
+=====
+rm -rf build && cmake -B build
+cmake --build -t clean
+cmake --build
+find src \( -name '*.hpp' -o -name '*.cc' -o -name '*.h' -o -name '*.cpp' \)  -exec clang-format -i {} \;
