@@ -2,8 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.57)
-AC_INIT(StdioTunnel, 0.2, [mars@antlersoft.com])
-AM_INIT_AUTOMAKE( StdioTunnel, 0.2)
+AC_INIT(StdioTunnel, 0.3-dev, [mars@antlersoft.com])
+AM_INIT_AUTOMAKE( StdioTunnel, 0.3-dev)
 AC_LANG(C++)
 AC_CONFIG_SRCDIR([src/com/antlersoft/MyException.cpp])
 AC_CONFIG_HEADER([config.h])
