@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.13)
 # CMAKE_CXX_STANDARD requires 3.1
 # HOMEPAGE_URL requires 3.12
 # target_link_options requires 3.13
