@@ -21,10 +21,10 @@
 #include <termios.h>
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
-#include "com/antlersoft/RefPtr.h"
 #include "com/antlersoft/net/PollConfig.h"
 #include "com/antlersoft/net/Poller.h"
 #include "com/antlersoft/net/ReadStream.h"
@@ -67,8 +67,9 @@ class ConnectionSpec {
 
 class StdioTunnel;
 class TunnelConnection;
+typedef std::shared_ptr<TunnelConnection> TunnelConnectionPtr;
 
-class ConnectionLink : public RefObject, public com::antlersoft::net::Polled {
+class ConnectionLink : public com::antlersoft::net::Polled {
   TunnelConnection& m_connection;
   int m_socket;
   short m_id;
@@ -78,9 +79,13 @@ class ConnectionLink : public RefObject, public com::antlersoft::net::Polled {
 
  public:
   ConnectionLink(TunnelConnection& connection, short id, int socket);
+  virtual ~ConnectionLink() = default;
+
+  // Polled interface
   void polled(com::antlersoft::net::Poller& poller, pollfd& poll_struct);
   void setPollfd(pollfd& poll_struct);
   void cleanup(pollfd& poll_struct);
+
   com::antlersoft::net::Polled& getPolled() { return *this; }
   com::antlersoft::net::SockBuffer& getBuffer() { return m_buffer; }
   int getSocket() { return m_socket; }
@@ -91,19 +96,19 @@ class ConnectionLink : public RefObject, public com::antlersoft::net::Polled {
   void setAcknowledged(bool ack, com::antlersoft::net::Poller& poller);
 };
 
-typedef RefPtr<ConnectionLink> ConnectionLinkPtr;
+typedef std::shared_ptr<ConnectionLink> ConnectionLinkPtr;
 
-class TunnelConnection : public RefObject {
+class TunnelConnection {
  private:
   ConnectionSpec& m_spec;
   int m_id;
-  void receiveData(StdioTunnel& tunnel, ConnectionLinkPtr link);
+  void receiveData(StdioTunnel& tunnel, const ConnectionLinkPtr& link);
 
  protected:
   CustomWriteStream& m_writer;
   TunnelConnection(ConnectionSpec& spec, int id, CustomWriteStream& writer);
   std::map<short, ConnectionLinkPtr> m_link_map;
-  void processLinkMessage(StdioTunnel& tunnel, int command, ConnectionLinkPtr link);
+  void processLinkMessage(StdioTunnel& tunnel, int command, const ConnectionLinkPtr& link);
 
  public:
   static const int BUFFER_SIZE = 4096;
@@ -117,21 +122,19 @@ class TunnelConnection : public RefObject {
     LINK_SEND_FOR_ACK = 392,
     LINK_ACK = 393
   };
-  static RefPtr<TunnelConnection> CreateConnection(StdioTunnel& tunnel, ConnectionSpec& spec, bool is_local, int id);
+  static TunnelConnectionPtr CreateConnection(StdioTunnel& tunnel, ConnectionSpec& spec, bool is_local, int id);
   ConnectionSpec& getSpec() { return m_spec; }
   int getID() { return m_id; }
   virtual void processMessage(StdioTunnel& tunnel) = 0;
-  void closeLink(com::antlersoft::net::Poller& poller, ConnectionLinkPtr to_close);
-  void sendData(ConnectionLinkPtr source, char* bytes, int length);
+  void closeLink(com::antlersoft::net::Poller& poller, ConnectionLink* const to_close);
+  void sendData(ConnectionLink* const source, char* bytes, int length);
 };
-
-typedef RefPtr<TunnelConnection> TunnelConnectionPtr;
 
 /**
  * This class holds the common portions of StdioTunnelLocal
  * and StdioTunnelRemote
  */
-class StdioTunnel : public RefObject, public com::antlersoft::net::PollCallback {
+class StdioTunnel : public com::antlersoft::net::PollCallback {
  private:
   /** Not implemented */
   StdioTunnel(const StdioTunnel& to_copy);
@@ -167,7 +170,7 @@ class StdioTunnel : public RefObject, public com::antlersoft::net::PollCallback 
  public:
   enum Commands { CMD_ERROR = 401, CMD_CREATE = 402, CMD_CONNECTION = 403, CMD_SHUTDOWN = 404 };
   /** Create one or another side of a tunnel */
-  static RefPtr<StdioTunnel> CreateTunnel(int argc, char* argv[]);
+  static std::shared_ptr<StdioTunnel> CreateTunnel(int argc, char* argv[]);
   /** This function starts the tunnel operating; it does not return */
   virtual void start() = 0;
   /** This function sends an error message to the user */

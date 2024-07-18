@@ -23,9 +23,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(SOURCES
 src/com/antlersoft/MyException.cpp
 src/com/antlersoft/MyException.h
-src/com/antlersoft/RefObject.cpp
-src/com/antlersoft/RefObject.h
-src/com/antlersoft/RefPtr.h
 src/com/antlersoft/StderrEndl.h
 src/com/antlersoft/Trace.cpp
 src/com/antlersoft/Trace.h

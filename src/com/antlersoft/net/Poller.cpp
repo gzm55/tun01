@@ -131,7 +131,7 @@ void Poller::requestFinish() { m_finishing = true; }
 bool Poller::isFinished() { return m_finishing; }
 
 void Poller::addPolled(Polled& to_add) {
-  PolledAndPollfdPtr ptr(new PolledAndPollfd);
+  PolledAndPollfdPtr ptr = std::make_shared<PolledAndPollfd>();
   ptr->m_polled = &to_add;
   m_polled.push_back(ptr);
   ptr->m_polled->setPollfd(ptr->m_pollfd);

@@ -222,7 +222,7 @@ ConnectionSpec parseConnection(ConnectionSpec::Direction direction, char* arg) {
 }
 }  // namespace
 
-RefPtr<StdioTunnel> StdioTunnel::CreateTunnel(const int argc, char* argv[]) {
+shared_ptr<StdioTunnel> StdioTunnel::CreateTunnel(const int argc, char* argv[]) {
   Trace trace("StdioTunnel::CreateTunnel");
   bool local = true;
   bool version = false;
@@ -268,8 +268,12 @@ RefPtr<StdioTunnel> StdioTunnel::CreateTunnel(const int argc, char* argv[]) {
   if (version && argc == 2) {
     throw "";
   }
-  RefPtr<StdioTunnel> tunnel =
-      local ? static_cast<StdioTunnel*>(new StdioTunnelLocal()) : static_cast<StdioTunnel*>(new StdioTunnelRemote());
+  shared_ptr<StdioTunnel> tunnel;
+  if (local) {
+    tunnel = make_shared<StdioTunnelLocal>();
+  } else {
+    tunnel = make_shared<StdioTunnelRemote>();
+  }
   tunnel->configure(argc, argv);
   return tunnel;
 }
@@ -437,7 +441,7 @@ void StdioTunnelLocal::start() {
      */
     for (vector<ConnectionSpec>::iterator i = m_connection_specs.begin(); i != m_connection_specs.end(); ++i) {
       TunnelConnectionPtr pConn = TunnelConnection::CreateConnection(*this, *i, true, g_id++);
-      if (!pConn.isNull()) {
+      if (pConn) {
         m_connection_map[pConn->getID()] = pConn;
       }
     }
@@ -611,7 +615,7 @@ void StdioTunnelRemote::polled(Poller&, pollfd& poll_struct) {
               ConnectionSpec& spec = *new ConnectionSpec;
               spec.serialize(getReader());
               TunnelConnectionPtr pConn = TunnelConnection::CreateConnection(*this, spec, false, id);
-              if (!pConn.isNull()) {
+              if (pConn) {
                 m_connection_map[id] = pConn;
               }
             }
@@ -679,6 +683,7 @@ class ListenSide : public TunnelConnection, public Polled {
 
  public:
   ListenSide(ConnectionSpec& spec, int id, CustomWriteStream& writer);
+  virtual ~ListenSide() = default;
   Polled& getPolled() { return *this; }
   void processMessage(StdioTunnel& tunnel);
   bool initialize();
@@ -690,6 +695,7 @@ class ListenSide : public TunnelConnection, public Polled {
 class ConnectSide : public TunnelConnection {
  public:
   ConnectSide(ConnectionSpec& spec, int id, CustomWriteStream& writer);
+  virtual ~ConnectSide() = default;
   void processMessage(StdioTunnel& tunnel);
 };
 
@@ -702,18 +708,18 @@ TunnelConnectionPtr TunnelConnection::CreateConnection(StdioTunnel& tunnel, Conn
   TunnelConnectionPtr result;
   if ((is_local && spec.m_connection_type == ConnectionSpec::CONNECT) ||
       (!is_local && spec.m_connection_type == ConnectionSpec::LISTEN)) {
-    RefPtr<ListenSide> listener = new ListenSide(spec, id, tunnel.getWriter());
+    shared_ptr<ListenSide> listener = make_shared<ListenSide>(spec, id, tunnel.getWriter());
     if (listener->initialize()) {
       result = listener;
       tunnel.getPoller().addPolled(listener->getPolled());
     }
   } else {
-    result = new ConnectSide(spec, id, tunnel.getWriter());
+    result = make_shared<ConnectSide>(spec, id, tunnel.getWriter());
   }
   return result;
 }
 
-void TunnelConnection::closeLink(Poller& poller, ConnectionLinkPtr to_close) {
+void TunnelConnection::closeLink(com::antlersoft::net::Poller& poller, ConnectionLink* const to_close) {
   if (!to_close->isClosing()) {
     to_close->setClosing(poller);
     m_writer.writeShort(StdioTunnel::CMD_CONNECTION);
@@ -724,7 +730,7 @@ void TunnelConnection::closeLink(Poller& poller, ConnectionLinkPtr to_close) {
   }
 }
 
-void TunnelConnection::sendData(ConnectionLinkPtr source, char* bytes, int length) {
+void TunnelConnection::sendData(ConnectionLink* const source, char* bytes, int length) {
   Trace trace("TunnelConnection::sendData");
   m_writer.writeShort(StdioTunnel::CMD_CONNECTION);
   m_writer.writeShort(getID());
@@ -735,7 +741,7 @@ void TunnelConnection::sendData(ConnectionLinkPtr source, char* bytes, int lengt
   m_writer.send();
 }
 
-void TunnelConnection::receiveData(StdioTunnel& tunnel, ConnectionLinkPtr link) {
+void TunnelConnection::receiveData(StdioTunnel& tunnel, const ConnectionLinkPtr& link) {
   Trace trace("TunnelConnection::receiveData");
   char buffer[BUFFER_SIZE];
   short length = tunnel.getReader().readShort();
@@ -747,14 +753,14 @@ void TunnelConnection::receiveData(StdioTunnel& tunnel, ConnectionLinkPtr link) 
   }
 }
 
-void TunnelConnection::processLinkMessage(StdioTunnel& tunnel, int command, ConnectionLinkPtr link) {
+void TunnelConnection::processLinkMessage(StdioTunnel& tunnel, int command, const ConnectionLinkPtr& link) {
   Trace trace("TunnelConnection::processLinkMessage");
   switch (command) {
     case LINK_SEND:
       receiveData(tunnel, link);
       break;
     case LINK_CLOSE: {
-      closeLink(tunnel.getPoller(), link);
+      closeLink(tunnel.getPoller(), link.get());
       m_link_map.erase(m_link_map.find(link->getID()));
     } break;
     case LINK_SEND_FOR_ACK:
@@ -837,7 +843,7 @@ void ListenSide::polled(Poller&, pollfd&) {
   if (connect_sock < 0) throw MY_EXCEPTION_ERRNO;
   if (fcntl(connect_sock, F_SETFL, O_NONBLOCK) < 0) throw MY_EXCEPTION_ERRNO;
   int next_id = m_next_id++;
-  ConnectionLinkPtr link = new ConnectionLink(*this, next_id, connect_sock);
+  ConnectionLinkPtr link = make_shared<ConnectionLink>(*this, next_id, connect_sock);
   m_link_map[next_id] = link;
   m_writer.writeShort(StdioTunnel::CMD_CONNECTION);
   m_writer.writeShort(getID());
@@ -902,7 +908,7 @@ void ConnectSide::processMessage(StdioTunnel& tunnel) {
               tunnel.reportError("Failed to set connect socket non blocking");
             } else {
               success = true;
-              link = new ConnectionLink(*this, link_id, connect_sock);
+              link = make_shared<ConnectionLink>(*this, link_id, connect_sock);
               tunnel.getPoller().addPolled(link->getPolled());
               m_link_map[link_id] = link;
             }
@@ -947,7 +953,7 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, signalHandler);
   signal(SIGQUIT, signalHandler);
   try {
-    RefPtr<StdioTunnel> tunnel;
+    shared_ptr<StdioTunnel> tunnel;
     try {
       tunnel = StdioTunnel::CreateTunnel(argc, argv);
     } catch (MyException& e) {

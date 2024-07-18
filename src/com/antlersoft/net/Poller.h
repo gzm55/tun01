@@ -1,9 +1,9 @@
 #ifndef COM_ANTLERSOFT_NET_POLLER_H
 #define COM_ANTLERSOFT_NET_POLLER_H
 
+#include <memory>
 #include <vector>
 
-#include "com/antlersoft/RefPtr.h"
 #include "com/antlersoft/net/PollConfig.h"
 
 namespace com {
@@ -26,11 +26,11 @@ namespace antlersoft {
 
     class Poller {
      private:
-      struct PolledAndPollfd : public RefObject {
+      struct PolledAndPollfd {
         Polled* m_polled;
         pollfd m_pollfd;
       };
-      typedef RefPtr<PolledAndPollfd> PolledAndPollfdPtr;
+      typedef std::shared_ptr<PolledAndPollfd> PolledAndPollfdPtr;
       const static int INITIAL_SIZE = 10;
       std::vector<PolledAndPollfdPtr> m_polled;
       pollfd* m_pollfds;
