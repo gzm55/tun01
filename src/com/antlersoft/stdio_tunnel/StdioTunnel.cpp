@@ -300,7 +300,7 @@ void MagicStringDetector::processReadData(char* buffer, int& count, int) {
       if (++m_recognized_login_count >= (int)m_login_pattern.length()) {
         m_tunnel.remoteInit(m_remote_cmd);  // run remote cmd only once
       }
-    } else {
+    } else if (m_recognized_login_count < (int)m_login_pattern.length()) {
       m_recognized_login_count = 0;
     }
   }

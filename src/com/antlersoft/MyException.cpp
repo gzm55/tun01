@@ -1,9 +1,9 @@
 #include "com/antlersoft/MyException.h"
 
 #include <cerrno>
+#include <cstring>
 #include <iostream>
 #include <sstream>
-#include <cstring>
 
 #include "com/antlersoft/StderrEndl.h"
 #include "com/antlersoft/Trace.h"
