@@ -222,14 +222,14 @@ ConnectionSpec parseConnection(ConnectionSpec::Direction direction, char* arg) {
 }
 }  // namespace
 
-RefPtr<StdioTunnel> StdioTunnel::CreateTunnel(int argc, char* argv[]) {
+RefPtr<StdioTunnel> StdioTunnel::CreateTunnel(const int argc, char* argv[]) {
   Trace trace("StdioTunnel::CreateTunnel");
   bool local = true;
   bool version = false;
 
   for (int i = 1; i < argc; ++i) {
     char* arg = argv[i];
-    if (arg[0] == '-') {
+    if (arg[0] == '-' && arg[1] != '\0') {
       switch (arg[1]) {
         case 'l':
           local = true;
@@ -244,7 +244,24 @@ RefPtr<StdioTunnel> StdioTunnel::CreateTunnel(int argc, char* argv[]) {
           cout << PACKAGE_STRING << cerr_endl() << flush;
           version = true;
           break;
+        case 'L':
+        case 'R':
+        case 'p':
+        case 'c':
+          // skip connection spec, login pattern and remote cmd
+          i += (arg[2] == 0);
+          break;
+        case '-':
+          i = argc - 1;  // skip argv after "--"
+          break;
+        case 'T':
+        case 't':
+          break;  // process by configure(...)
+        default:
+          throw MY_EXCEPTION("Unknown option");
       }
+    } else {
+      break;  // stop at connect command
     }
   }
   // Get out with no error if all they want is the version
@@ -260,19 +277,32 @@ RefPtr<StdioTunnel> StdioTunnel::CreateTunnel(int argc, char* argv[]) {
 void StdioTunnel::configure(int, char*[]) { Trace trace("StdioTunnel::configure"); }
 
 MagicStringDetector::MagicStringDetector(StdioTunnelLocal& tunnel, string magic_string)
-    : m_recognized_count(0), m_magic_string(magic_string), m_tunnel(tunnel) {}
+    : m_recognized_count(0),
+      m_magic_string(magic_string),
+      m_tunnel(tunnel),
+      m_recognized_login_count(0),
+      m_login_pattern(""),
+      m_remote_cmd("") {}
 
 void MagicStringDetector::processReadData(char* buffer, int& count, int) {
   Trace trace("MagicStringDetector::processReadData");
   for (int i = 0; i < count; ++i) {
     if (buffer[i] == m_magic_string[m_recognized_count]) {
-      m_recognized_count++;
-      if (m_recognized_count >= (int)m_magic_string.length()) {
+      if (++m_recognized_count >= (int)m_magic_string.length()) {
         m_tunnel.startHandshaking();
         return;
       }
-    } else
+    } else {
       m_recognized_count = 0;
+    }
+    if (0 < m_remote_cmd.length() && m_recognized_login_count < (int)m_login_pattern.length() &&
+        buffer[i] == m_login_pattern[m_recognized_login_count]) {
+      if (++m_recognized_login_count >= (int)m_login_pattern.length()) {
+        m_tunnel.remoteInit(m_remote_cmd);  // run remote cmd only once
+      }
+    } else {
+      m_recognized_login_count = 0;
+    }
   }
 }
 
@@ -297,22 +327,28 @@ void StdioTunnelLocal::startHandshaking() {
   }
 }
 
-void StdioTunnelLocal::configure(int argc, char* argv[]) {
+void StdioTunnelLocal::remoteInit(const string& remote_cmd) {
+  Trace trace(string("StdioTunnelLocal::remoteInit: ") + remote_cmd);
+  const string send_cmd = remote_cmd + "\n";
+  if (write(getWriter().m_fd, send_cmd.c_str(), send_cmd.length()) != (ssize_t)send_cmd.length())
+    throw MY_EXCEPTION_ERRNO;
+}
+
+void StdioTunnelLocal::configure(const int argc, char* argv[]) {
   Trace trace("StdioTunnelLocal::configure");
 
-  for (int i = 1; i < argc; ++i) {
+  for (int i = 1; i < argc && nullptr == m_command; ++i) {
     char* arg = argv[i];
     if (arg[0] == '-' && arg[1] != 0) {
       bool long_arg = (arg[2] != 0 || i + 1 == argc);
       switch (arg[1]) {
         case 'R':
           m_connection_specs.push_back(parseConnection(ConnectionSpec::LISTEN, long_arg ? arg + 2 : argv[i + 1]));
+          i += !long_arg;
           break;
         case 'L':
           m_connection_specs.push_back(parseConnection(ConnectionSpec::CONNECT, long_arg ? arg + 2 : argv[i + 1]));
-          break;
-        case 'e':
-          m_command = long_arg ? arg + 2 : argv[i + 1];
+          i += !long_arg;
           break;
         case 'T':
           m_force_pipe = true;
@@ -320,11 +356,24 @@ void StdioTunnelLocal::configure(int argc, char* argv[]) {
         case 't':
           m_expects_pipe = true;
           break;
+        case 'p':
+          m_read_buffer.setLoginPattern(long_arg ? arg + 2 : argv[i + 1]);
+          i += !long_arg;
+          break;
+        case 'c':
+          m_read_buffer.setRemoteCmd(long_arg ? arg + 2 : argv[i + 1]);
+          i += !long_arg;
+          break;
+        case '-':  // all args after "--" are connection commands
+          m_command = argv + i + 1;
+          break;
       }
+    } else {
+      m_command = argv + i;
     }
   }
   if (m_connection_specs.size() == 0) throw MY_EXCEPTION("No connections defined");
-  if (m_command.length() == 0) throw MY_EXCEPTION("No connection command defined");
+  if (nullptr == m_command || nullptr == *m_command) throw MY_EXCEPTION("No connection command defined");
 }
 
 namespace {
@@ -411,15 +460,8 @@ void StdioTunnelLocal::start() {
     m_poller.addPolled(*this);
     m_poller.start();
   } else {
-    char shellopt[] = "-c";
-    char* argv[4];
-    argv[0] = getenv("SHELL");
-    argv[1] = shellopt;
-    argv[2] = const_cast<char*>(m_command.c_str());
-    argv[3] = static_cast<char*>(0);
-    // execl doesn't work on cygwin
-    // execl( getenv( "SHELL"), getenv( "SHELL"), "-c", m_command.c_str());
-    execv(getenv("SHELL"), argv);
+    // argv[argc] shall be a null pointer. (from Program startup section of C Standard)
+    execvp(*m_command, m_command);
     /* Should never get here */
     exit(-1);
   }
@@ -882,7 +924,7 @@ void ConnectSide::processMessage(StdioTunnel& tunnel) {
 
 namespace {
 
-bool g_signaled = false;
+static volatile bool g_signaled = false;
 
 void signalHandler(int) { g_signaled = true; }
 
@@ -908,10 +950,13 @@ int main(int argc, char* argv[]) {
     try {
       tunnel = StdioTunnel::CreateTunnel(argc, argv);
     } catch (MyException& e) {
-      cerr << cerr_endl() << "Usage: StdioTunnel [-l] <-L|-R <connection spec>>... -e <connection command>"
-           << cerr_endl() << cerr_endl() << "or (on the remote side)" << cerr_endl() << cerr_endl() << "StdioTunnel -r"
-           << cerr_endl() << cerr_endl() << "where connection_spec = <listen port>:<connect host>:<connect port>[:ap]"
-           << cerr_endl() << flush;
+      cerr << cerr_endl()
+           << "Usage: StdioTunnel [-D] [-l] [-T|-t] <-L|-R <connection spec>>... [-p login-pattern] [-c remote-cmd] "
+              "connection-command [args...]"
+           << cerr_endl() << cerr_endl() << "or (on the remote side)" << cerr_endl() << cerr_endl()
+           << "StdioTunnel [-D] -r" << cerr_endl() << cerr_endl() << "or (print version)" << cerr_endl() << cerr_endl()
+           << "StdioTunnel -V" << cerr_endl() << cerr_endl()
+           << "where connection_spec = <listen port>:<connect host>:<connect port>[:ap]" << cerr_endl() << flush;
       throw;
     }
     tunnel->startFinish();

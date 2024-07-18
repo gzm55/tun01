@@ -188,10 +188,15 @@ class MagicStringDetector : public com::antlersoft::net::SockBuffer {
   int m_recognized_count;
   std::string m_magic_string;
   StdioTunnelLocal& m_tunnel;
+  int m_recognized_login_count;
+  std::string m_login_pattern;
+  std::string m_remote_cmd;
 
  public:
   MagicStringDetector(StdioTunnelLocal& tunnel, std::string magic_string);
   void processReadData(char* buffer, int& count, int max_length);
+  void setLoginPattern(const std::string& p) { m_login_pattern = p; }
+  void setRemoteCmd(const std::string& c) { m_remote_cmd = c; }
 };
 
 class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
@@ -206,7 +211,7 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
     CONNECTED,
     SHUT_DOWN
   } m_state;
-  std::string m_command;
+  char* const* m_command;
   int m_read_fd;
   int m_write_fd;
   bool m_force_pipe;
@@ -216,6 +221,7 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
   com::antlersoft::net::SockBuffer m_write_buffer;
   friend class MagicStringDetector;
   void startHandshaking();
+  void remoteInit(const std::string& remote_cmd);
 
  protected:
   void configure(int argc, char* argv[]);
@@ -223,6 +229,7 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
  public:
   StdioTunnelLocal()
       : m_state(INITIAL),
+        m_command(nullptr),
         m_read_fd(-1),
         m_write_fd(-1),
         m_force_pipe(false),

@@ -206,18 +206,6 @@ from any host to port 2002 on the remote host to
 port 143 on the local host.  Note that the connection command itself
 starts the remote side of StdioTunnel.</simpara>
 </refsect1>
-  <refsect1>
-    <title>Environment Variables</title>
-	<variablelist>
-	  <varlistentry>
-	    <term><envar>SHELL</envar></term>
-	    <listitem>
-	      <simpara>StdioTunnel passes the <replaceable>connection command</replaceable>
-to the program specified by the SHELL environment variable.</simpara>
-	    </listitem>
-	  </varlistentry>
-	</variablelist>
-      </refsect1>
       <refsect1>
       <title>Bugs</title>
 	<simpara>
