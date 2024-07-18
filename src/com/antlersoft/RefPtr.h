@@ -38,7 +38,7 @@ class RefPtrException : public std::exception {
 
  public:
   RefPtrException(const char* msg) : m_what(msg) {}
-  virtual const char* what() const _NOEXCEPT { return m_what; }
+  virtual const char* what() const noexcept { return m_what; }
 };
 
 template <class C>
@@ -53,7 +53,7 @@ class RefPtr {
   RefPtr(C* newObject) throw() : holder(newObject) { holder->m__ReferenceCount++; }
 
   template <class D>
-  RefPtr(const RefPtr<D>& toCopy) throw(std::bad_cast) : holder(toCopy.holder) {
+  RefPtr(const RefPtr<D>& toCopy) : holder(toCopy.holder) {
     if (holder) {
       dynamic_cast<C&>(*toCopy.holder);
       holder->m__ReferenceCount++;
@@ -82,7 +82,7 @@ class RefPtr {
   }
 
   template <class D>
-  RefPtr& operator=(const RefPtr<D>& toAssign) throw(std::bad_cast) {
+  RefPtr& operator=(const RefPtr<D>& toAssign) {
     if (toAssign.holder) {
       (void)dynamic_cast<C&>(*(toAssign.holder));
 

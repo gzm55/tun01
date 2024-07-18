@@ -105,7 +105,7 @@ void ReadStream::fill(pollfd& poll_struct) {
       if (m_read_count < 4) return;
     }
     size_t length = ntohl(*reinterpret_cast<long*>(m_read_buf));
-    if (length < 0 || length > 50000000) throw MY_EXCEPTION("Bad read length");
+    if (length > 50000000) throw MY_EXCEPTION("Bad read length");
     if (length + 4 > m_read_size) {
       m_read_size = length + 4;
       char* temp_buf = new char[m_read_size];

@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <iostream>
 #include <sstream>
+#include <cstring>
 
 #include "com/antlersoft/StderrEndl.h"
 #include "com/antlersoft/Trace.h"

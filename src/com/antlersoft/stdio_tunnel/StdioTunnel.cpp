@@ -767,6 +767,7 @@ void TunnelConnection::processLinkMessage(StdioTunnel& tunnel, int command, Conn
         m_writer.send();
         break;
       }
+      [[gnu::fallthrough]];
     case LINK_ACK:
       link->setAcknowledged(true, tunnel.getPoller());
       break;
