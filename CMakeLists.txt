@@ -9,7 +9,7 @@ project(StdioTunnel
 	HOMEPAGE_URL https://github.com/gzm55/tun01
 	DESCRIPTION "StdioTunnel allows you to tunnel arbitrary TCP connections through any connection that approximates a tty with a clear 8-bit data path.")
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if(NOT CMAKE_BUILD_TYPE)

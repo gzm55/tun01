@@ -70,8 +70,8 @@ int cfmakeraw(termios* termios_p) {
 }
 #endif
 
-void ConnectionSpec::serialize(ReadStream& stream) {
-  Trace trace("ConnectionSpec::serialize");
+void ConnectionSpec::deserialize(ReadStream& stream) {
+  Trace trace("ConnectionSpec::deserialize");
   m_connection_type = (Direction)stream.readShort();
   m_connect_host = stream.readString();
   m_connect_port = stream.readShort();
@@ -79,8 +79,8 @@ void ConnectionSpec::serialize(ReadStream& stream) {
   m_flags = stream.readShort();
 }
 
-void ConnectionSpec::serialize(CustomWriteStream& stream) {
-  Trace trace("ConnectionSpec::serialize(write)");
+void ConnectionSpec::serialize(WriteStream& stream) {
+  Trace trace("ConnectionSpec::serialize");
   stream.writeShort(m_connection_type);
   stream.writeString(m_connect_host);
   stream.writeShort(m_connect_port);
@@ -110,7 +110,7 @@ void ConnectionLink::polled(Poller& poller, pollfd& poll_struct) {
       return;
     }
     m_connection.sendData(this, buffer, count);
-    if (m_connection.getSpec().m_flags & ConnectionSpec::ACK_PACKETS) {
+    if (m_connection.getSpec()->m_flags & ConnectionSpec::ACK_PACKETS) {
       Trace t("Setting acknowledged to false");
       setAcknowledged(false, poller);
     }
@@ -184,11 +184,14 @@ void StdioTunnel::startFinish() {
 }
 
 namespace {
-ConnectionSpec parseConnection(ConnectionSpec::Direction direction, char* arg) {
+auto parseConnection(ConnectionSpec::Direction direction, char* arg) {
   Trace trace("parseConnection");
+
+  // split by ':'
   vector<string> connect_params;
   istringstream input(arg);
   for (string t; getline(input, t, ':'); connect_params.push_back(t));
+
   if (connect_params.size() != 3 && connect_params.size() != 4) {
     throw MY_EXCEPTION(stringstream() << "Bad connection argument: " << arg);
   }
@@ -200,16 +203,16 @@ ConnectionSpec parseConnection(ConnectionSpec::Direction direction, char* arg) {
   if (connect_port <= 0) {
     throw MY_EXCEPTION(stringstream() << "Bad connect port: " << connect_params[2].c_str());
   }
-  ConnectionSpec result;
-  result.m_connection_type = direction;
-  result.m_connect_host = connect_params[1];
-  result.m_connect_port = connect_port;
-  result.m_listen_port = listen_port;
-  result.m_flags = 0;
+  auto result = make_shared<ConnectionSpec>();
+  result->m_connection_type = direction;
+  result->m_connect_host = connect_params[1];
+  result->m_connect_port = connect_port;
+  result->m_listen_port = listen_port;
+  result->m_flags = 0;
 
   if (connect_params.size() == 4) {
-    if (connect_params[3].find('a') != string::npos) result.m_flags |= ConnectionSpec::ACK_PACKETS;
-    if (connect_params[3].find('p') != string::npos) result.m_flags |= ConnectionSpec::PROMISCUOUS;
+    if (connect_params[3].find('a') != string::npos) result->m_flags |= ConnectionSpec::ACK_PACKETS;
+    if (connect_params[3].find('p') != string::npos) result->m_flags |= ConnectionSpec::PROMISCUOUS;
   }
   return result;
 }
@@ -311,7 +314,7 @@ void StdioTunnelLocal::startHandshaking() {
   getWriter().writeShort(m_connection_map.size());
   for (map<int, TunnelConnectionPtr>::iterator it = m_connection_map.begin(); it != m_connection_map.end(); ++it) {
     getWriter().writeShort(it->second->getID());
-    it->second->getSpec().serialize(getWriter());
+    it->second->getSpec()->serialize(getWriter());
   }
   getWriter().send();
   getPoller().removePolled(*this, STDIN_FD);
@@ -432,7 +435,7 @@ void StdioTunnelLocal::start() {
     /**
      * Create connection objects
      */
-    for (vector<ConnectionSpec>::iterator i = m_connection_specs.begin(); i != m_connection_specs.end(); ++i) {
+    for (auto i = m_connection_specs.begin(); i != m_connection_specs.end(); ++i) {
       TunnelConnectionPtr pConn = TunnelConnection::CreateConnection(*this, *i, true, g_id++);
       if (pConn) {
         m_connection_map[pConn->getID()] = pConn;
@@ -604,9 +607,8 @@ void StdioTunnelRemote::polled(Poller&, pollfd& poll_struct) {
             int count = getReader().readShort();
             for (int i = 0; i < count; ++i) {
               int id = getReader().readShort();
-              /* Memory leak here */
-              ConnectionSpec& spec = *new ConnectionSpec;
-              spec.serialize(getReader());
+              auto spec = make_shared<ConnectionSpec>();
+              spec->deserialize(getReader());
               TunnelConnectionPtr pConn = TunnelConnection::CreateConnection(*this, spec, false, id);
               if (pConn) {
                 m_connection_map[id] = pConn;
@@ -674,7 +676,7 @@ class ListenSide : public TunnelConnection, public Polled {
   int m_next_id;
 
  public:
-  ListenSide(ConnectionSpec& spec, int id, CustomWriteStream& writer);
+  ListenSide(shared_ptr<ConnectionSpec> spec, int id, CustomWriteStream& writer);
   virtual ~ListenSide() = default;
   Polled& getPolled() { return *this; }
   void processMessage(StdioTunnel& tunnel);
@@ -686,21 +688,21 @@ class ListenSide : public TunnelConnection, public Polled {
 
 class ConnectSide : public TunnelConnection {
  public:
-  ConnectSide(ConnectionSpec& spec, int id, CustomWriteStream& writer);
+  ConnectSide(shared_ptr<ConnectionSpec> spec, int id, CustomWriteStream& writer);
   virtual ~ConnectSide() = default;
   void processMessage(StdioTunnel& tunnel);
 };
 
-TunnelConnection::TunnelConnection(ConnectionSpec& spec, int id, CustomWriteStream& writer)
+TunnelConnection::TunnelConnection(shared_ptr<ConnectionSpec> spec, int id, CustomWriteStream& writer)
     : m_spec(spec), m_id(id), m_writer(writer) {}
 
-TunnelConnectionPtr TunnelConnection::CreateConnection(StdioTunnel& tunnel, ConnectionSpec& spec, bool is_local,
-                                                       int id) {
+TunnelConnectionPtr TunnelConnection::CreateConnection(StdioTunnel& tunnel, shared_ptr<ConnectionSpec> spec,
+                                                       bool is_local, int id) {
   Trace trace("TunnelConnection::CreateConnection");
   TunnelConnectionPtr result;
-  if ((is_local && spec.m_connection_type == ConnectionSpec::CONNECT) ||
-      (!is_local && spec.m_connection_type == ConnectionSpec::LISTEN)) {
-    shared_ptr<ListenSide> listener = make_shared<ListenSide>(spec, id, tunnel.getWriter());
+  if ((is_local && spec->m_connection_type == ConnectionSpec::CONNECT) ||
+      (!is_local && spec->m_connection_type == ConnectionSpec::LISTEN)) {
+    auto listener = make_shared<ListenSide>(spec, id, tunnel.getWriter());
     if (listener->initialize()) {
       result = listener;
       tunnel.getPoller().addPolled(listener->getPolled());
@@ -726,7 +728,7 @@ void TunnelConnection::sendData(ConnectionLink* const source, char* bytes, int l
   Trace trace("TunnelConnection::sendData");
   m_writer.writeShort(StdioTunnel::CMD_CONNECTION);
   m_writer.writeShort(getID());
-  m_writer.writeShort((getSpec().m_flags & ConnectionSpec::ACK_PACKETS) ? LINK_SEND_FOR_ACK : LINK_SEND);
+  m_writer.writeShort((getSpec()->m_flags & ConnectionSpec::ACK_PACKETS) ? LINK_SEND_FOR_ACK : LINK_SEND);
   m_writer.writeShort(source->getID());
   m_writer.writeShort(length);
   m_writer.writeBytes(bytes, length);
@@ -772,7 +774,7 @@ void TunnelConnection::processLinkMessage(StdioTunnel& tunnel, int command, cons
   }
 }
 
-ListenSide::ListenSide(ConnectionSpec& spec, int id, CustomWriteStream& writer)
+ListenSide::ListenSide(shared_ptr<ConnectionSpec> spec, int id, CustomWriteStream& writer)
     : TunnelConnection(spec, id, writer), m_next_id(501) {}
 
 void ListenSide::processMessage(StdioTunnel& tunnel) {
@@ -806,12 +808,12 @@ bool ListenSide::initialize() {
 
   sockaddr_in saddr;
   saddr.sin_family = AF_INET;
-  if (getSpec().m_flags & ConnectionSpec::PROMISCUOUS)
+  if (getSpec()->m_flags & ConnectionSpec::PROMISCUOUS)
     saddr.sin_addr.s_addr = htonl(INADDR_ANY);
   else
     saddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-  saddr.sin_port = htons(getSpec().m_listen_port);
+  saddr.sin_port = htons(getSpec()->m_listen_port);
   m_listen_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (m_listen_socket >= 0) {
     if (::bind(m_listen_socket, (const sockaddr*)&saddr, sizeof(saddr)) == 0) {
@@ -834,7 +836,7 @@ void ListenSide::polled(Poller&, pollfd&) {
   if (connect_sock < 0) throw MY_EXCEPTION_ERRNO;
   if (fcntl(connect_sock, F_SETFL, O_NONBLOCK) < 0) throw MY_EXCEPTION_ERRNO;
   int next_id = m_next_id++;
-  ConnectionLinkPtr link = make_shared<ConnectionLink>(*this, next_id, connect_sock);
+  auto link = make_shared<ConnectionLink>(*this, next_id, connect_sock);
   m_link_map[next_id] = link;
   m_writer.writeShort(StdioTunnel::CMD_CONNECTION);
   m_writer.writeShort(getID());
@@ -851,7 +853,7 @@ void ListenSide::setPollfd(pollfd& poll_struct) {
 
 void ListenSide::cleanup(pollfd&) { close(m_listen_socket); }
 
-ConnectSide::ConnectSide(ConnectionSpec& spec, int id, CustomWriteStream& writer)
+ConnectSide::ConnectSide(shared_ptr<ConnectionSpec> spec, int id, CustomWriteStream& writer)
     : TunnelConnection(spec, id, writer) {}
 
 void ConnectSide::processMessage(StdioTunnel& tunnel) {
@@ -878,22 +880,22 @@ void ConnectSide::processMessage(StdioTunnel& tunnel) {
   switch (command) {
     case LINK_CREATE: {
       bool success = false;
-      hostent* host_entry = gethostbyname(getSpec().m_connect_host.c_str());
+      hostent* host_entry = gethostbyname(getSpec()->m_connect_host.c_str());
       if (!host_entry) {
-        string s = getSpec().m_connect_host + " not found";
+        string s = getSpec()->m_connect_host + " not found";
         tunnel.reportError(s);
       } else {
         sockaddr_in dest_addr;
         dest_addr.sin_family = AF_INET;
         memcpy((char*)&dest_addr.sin_addr.s_addr, host_entry->h_addr, host_entry->h_length);
-        dest_addr.sin_port = htons(getSpec().m_connect_port);
+        dest_addr.sin_port = htons(getSpec()->m_connect_port);
         int connect_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (connect_sock < 0) {
           string s = "Cannot create connect socket";
           tunnel.reportError(s);
         } else {
           if (connect(connect_sock, (sockaddr*)&dest_addr, sizeof(dest_addr)) < 0) {
-            tunnel.reportError(string("Failed to connect to ") + getSpec().m_connect_host);
+            tunnel.reportError(string("Failed to connect to ") + getSpec()->m_connect_host);
           } else {
             if (fcntl(connect_sock, F_SETFL, O_NONBLOCK) < 0) {
               tunnel.reportError("Failed to set connect socket non blocking");

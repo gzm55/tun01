@@ -61,8 +61,8 @@ class ConnectionSpec {
   /** Connection flags (see anon enumeration above )*/
   int m_flags;
 
-  void serialize(com::antlersoft::net::ReadStream& stream);
-  void serialize(CustomWriteStream& stream);
+  void deserialize(com::antlersoft::net::ReadStream& stream);
+  void serialize(com::antlersoft::net::WriteStream& stream);
 };
 
 class StdioTunnel;
@@ -100,13 +100,13 @@ typedef std::shared_ptr<ConnectionLink> ConnectionLinkPtr;
 
 class TunnelConnection {
  private:
-  ConnectionSpec& m_spec;
+  std::shared_ptr<ConnectionSpec> m_spec;
   int m_id;
   void receiveData(StdioTunnel& tunnel, const ConnectionLinkPtr& link);
 
  protected:
   CustomWriteStream& m_writer;
-  TunnelConnection(ConnectionSpec& spec, int id, CustomWriteStream& writer);
+  TunnelConnection(std::shared_ptr<ConnectionSpec> spec, int id, CustomWriteStream& writer);
   std::map<short, ConnectionLinkPtr> m_link_map;
   void processLinkMessage(StdioTunnel& tunnel, int command, const ConnectionLinkPtr& link);
 
@@ -122,8 +122,9 @@ class TunnelConnection {
     LINK_SEND_FOR_ACK = 392,
     LINK_ACK = 393
   };
-  static TunnelConnectionPtr CreateConnection(StdioTunnel& tunnel, ConnectionSpec& spec, bool is_local, int id);
-  ConnectionSpec& getSpec() { return m_spec; }
+  static TunnelConnectionPtr CreateConnection(StdioTunnel& tunnel, std::shared_ptr<ConnectionSpec> spec, bool is_local,
+                                              int id);
+  std::shared_ptr<ConnectionSpec> getSpec() { return m_spec; }
   int getID() { return m_id; }
   virtual void processMessage(StdioTunnel& tunnel) = 0;
   void closeLink(com::antlersoft::net::Poller& poller, ConnectionLink* const to_close);
@@ -219,7 +220,7 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
   int m_write_fd;
   bool m_force_pipe;
   bool m_expects_pipe;
-  std::vector<ConnectionSpec> m_connection_specs;
+  std::vector<std::shared_ptr<ConnectionSpec>> m_connection_specs;
   MagicStringDetector m_read_buffer;
   com::antlersoft::net::SockBuffer m_write_buffer;
   friend class MagicStringDetector;
