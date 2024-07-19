@@ -193,15 +193,16 @@ auto parseConnection(ConnectionSpec::Direction direction, char* arg) {
   for (string t; getline(input, t, ':'); connect_params.push_back(t));
 
   if (connect_params.size() != 3 && connect_params.size() != 4) {
-    throw MY_EXCEPTION(stringstream() << "Bad connection argument: " << arg);
+    throw MY_EXCEPTION(static_cast<stringstream&&>(stringstream() << "Bad connection argument: " << arg));
   }
   int listen_port = atoi(connect_params[0].c_str());
   if (listen_port <= 0) {
-    throw MY_EXCEPTION(stringstream() << "Bad listen port: " << connect_params[0].c_str());
+    throw MY_EXCEPTION(static_cast<stringstream&&>(stringstream() << "Bad listen port: " << connect_params[0].c_str()));
   }
   int connect_port = atoi(connect_params[2].c_str());
   if (connect_port <= 0) {
-    throw MY_EXCEPTION(stringstream() << "Bad connect port: " << connect_params[2].c_str());
+    throw MY_EXCEPTION(
+        static_cast<stringstream&&>(stringstream() << "Bad connect port: " << connect_params[2].c_str()));
   }
   auto result = make_shared<ConnectionSpec>();
   result->m_connection_type = direction;
@@ -624,7 +625,7 @@ void StdioTunnelRemote::polled(Poller&, pollfd& poll_struct) {
             getPoller().requestFinish();
             setShutdownByRequest();
           } else if (command != CMD_CONNECTION)
-            throw MY_EXCEPTION(stringstream() << "Unexpected command: " << command);
+            throw MY_EXCEPTION(static_cast<stringstream&&>(stringstream() << "Unexpected command: " << command));
           else {
             m_connection_map[getReader().readShort()]->processMessage(*this);
           }
@@ -783,7 +784,7 @@ void ListenSide::processMessage(StdioTunnel& tunnel) {
   short link_id = tunnel.getReader().readShort();
   map<short, ConnectionLinkPtr>::iterator it = m_link_map.find(link_id);
   if (it == m_link_map.end()) {
-    throw MY_EXCEPTION(stringstream() << "Link: " << link_id << " not found");
+    throw MY_EXCEPTION(static_cast<stringstream&&>(stringstream() << "Link: " << link_id << " not found"));
   }
   ConnectionLinkPtr link = it->second;
   switch (cmd) {
