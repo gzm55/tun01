@@ -20,26 +20,17 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-set(SOURCES
-src/com/antlersoft/MyException.cpp
-src/com/antlersoft/MyException.h
-src/com/antlersoft/StderrEndl.h
-src/com/antlersoft/Trace.cpp
-src/com/antlersoft/Trace.h
-src/com/antlersoft/net/PollConfig.h
-src/com/antlersoft/net/Poller.cpp
-src/com/antlersoft/net/Poller.h
-src/com/antlersoft/net/ReadStream.cpp
-src/com/antlersoft/net/ReadStream.h
-src/com/antlersoft/net/SockBuffer.cpp
-src/com/antlersoft/net/SockBuffer.h
-src/com/antlersoft/net/WriteStream.cpp
-src/com/antlersoft/net/WriteStream.h
-src/com/antlersoft/stdio_tunnel/StdioTunnel.cpp
-src/com/antlersoft/stdio_tunnel/StdioTunnel.h
-src/com/antlersoft/tokenize.h
+add_executable(${PROJECT_NAME})
+
+target_sources(${PROJECT_NAME} PRIVATE
+  src/com/antlersoft/MyException.cpp
+  src/com/antlersoft/Trace.cpp
+  src/com/antlersoft/net/Poller.cpp
+  src/com/antlersoft/net/ReadStream.cpp
+  src/com/antlersoft/net/SockBuffer.cpp
+  src/com/antlersoft/net/WriteStream.cpp
+  src/com/antlersoft/stdio_tunnel/StdioTunnel.cpp
 )
-add_executable(${PROJECT_NAME} ${SOURCES})
 
 INCLUDE(CMakePushCheckState)
 cmake_push_check_state(RESET)
@@ -83,7 +74,7 @@ endif()
 if(HAVE_NSL_LIB)
   list(APPEND libs nsl)
 endif()
-target_link_libraries(StdioTunnel ${libs})
+target_link_libraries(${PROJECT_NAME} ${libs})
 
 # Checks for library functions.
 include(CheckCXXSymbolExists)
@@ -124,9 +115,9 @@ endif()
 cmake_pop_check_state()
 
 CONFIGURE_FILE(config.h.cmake ${CMAKE_BINARY_DIR}/include/config.h)
-target_include_directories(StdioTunnel PRIVATE src ${CMAKE_BINARY_DIR}/include)
+target_include_directories(${PROJECT_NAME} PRIVATE src ${CMAKE_BINARY_DIR}/include)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  target_link_options(StdioTunnel PRIVATE -Wl,--as-needed)
+  target_link_options(${PROJECT_NAME} PRIVATE -Wl,--as-needed)
 endif()
 
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)

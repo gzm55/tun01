@@ -53,7 +53,6 @@
 #include "com/antlersoft/MyException.h"
 #include "com/antlersoft/StderrEndl.h"
 #include "com/antlersoft/Trace.h"
-#include "com/antlersoft/tokenize.h"
 
 using namespace std;
 using namespace com::antlersoft;
@@ -188,7 +187,8 @@ namespace {
 ConnectionSpec parseConnection(ConnectionSpec::Direction direction, char* arg) {
   Trace trace("parseConnection");
   vector<string> connect_params;
-  tokenize(connect_params, string(arg), ':');
+  istringstream input(arg);
+  for (string t; getline(input, t, ':'); connect_params.push_back(t));
   if (connect_params.size() != 3 && connect_params.size() != 4) {
     throw MY_EXCEPTION(
         static_cast<const stringstream&>(stringstream() << "Bad connection argument: " << arg).str().c_str());
