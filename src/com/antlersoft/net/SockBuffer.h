@@ -1,6 +1,7 @@
 #ifndef COM_ANTLERSOFT_NET_SOCK_BUFFER_H
 #define COM_ANTLERSOFT_NET_SOCK_BUFFER_H
 
+#include <cstddef>
 #include <deque>
 
 #include "com/antlersoft/net/PollConfig.h"
