@@ -101,6 +101,7 @@ endif()
 if(HAVE_UTIL_H)
   list(APPEND CMAKE_REQUIRED_INCLUDES util.h)
 endif()
+set(CMAKE_REQUIRED_LIBRARIES ${libs})
 check_cxx_symbol_exists(forkpty ${CMAKE_REQUIRED_INCLUDES} HAVE_FORKPTY)
 cmake_reset_check_state()
 
