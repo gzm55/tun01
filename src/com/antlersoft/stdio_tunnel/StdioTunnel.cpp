@@ -190,22 +190,15 @@ ConnectionSpec parseConnection(ConnectionSpec::Direction direction, char* arg) {
   istringstream input(arg);
   for (string t; getline(input, t, ':'); connect_params.push_back(t));
   if (connect_params.size() != 3 && connect_params.size() != 4) {
-    throw MY_EXCEPTION(
-        static_cast<const stringstream&>(stringstream() << "Bad connection argument: " << arg).str().c_str());
+    throw MY_EXCEPTION(stringstream() << "Bad connection argument: " << arg);
   }
   int listen_port = atoi(connect_params[0].c_str());
   if (listen_port <= 0) {
-    throw MY_EXCEPTION(
-        static_cast<const stringstream&>(stringstream() << "Bad listen port: " << connect_params[0].c_str())
-            .str()
-            .c_str());
+    throw MY_EXCEPTION(stringstream() << "Bad listen port: " << connect_params[0].c_str());
   }
   int connect_port = atoi(connect_params[2].c_str());
   if (connect_port <= 0) {
-    throw MY_EXCEPTION(
-        static_cast<const stringstream&>(stringstream() << "Bad connect port: " << connect_params[2].c_str())
-            .str()
-            .c_str());
+    throw MY_EXCEPTION(stringstream() << "Bad connect port: " << connect_params[2].c_str());
   }
   ConnectionSpec result;
   result.m_connection_type = direction;
@@ -629,8 +622,7 @@ void StdioTunnelRemote::polled(Poller&, pollfd& poll_struct) {
             getPoller().requestFinish();
             setShutdownByRequest();
           } else if (command != CMD_CONNECTION)
-            throw MY_EXCEPTION(
-                static_cast<const stringstream&>(stringstream() << "Unexpected command: " << command).str().c_str());
+            throw MY_EXCEPTION(stringstream() << "Unexpected command: " << command);
           else {
             m_connection_map[getReader().readShort()]->processMessage(*this);
           }
@@ -789,8 +781,7 @@ void ListenSide::processMessage(StdioTunnel& tunnel) {
   short link_id = tunnel.getReader().readShort();
   map<short, ConnectionLinkPtr>::iterator it = m_link_map.find(link_id);
   if (it == m_link_map.end()) {
-    throw MY_EXCEPTION(
-        static_cast<const stringstream&>(stringstream() << "Link: " << link_id << " not found").str().c_str());
+    throw MY_EXCEPTION(stringstream() << "Link: " << link_id << " not found");
   }
   ConnectionLinkPtr link = it->second;
   switch (cmd) {
@@ -964,15 +955,13 @@ int main(int argc, char* argv[]) {
            << "StdioTunnel [-D] -r" << cerr_endl() << cerr_endl() << "or (print version)" << cerr_endl() << cerr_endl()
            << "StdioTunnel -V" << cerr_endl() << cerr_endl()
            << "where connection_spec = <listen port>:<connect host>:<connect port>[:ap]" << cerr_endl() << flush;
-      throw;
+      throw "";
     }
     tunnel->startFinish();
-  } catch (const char* s) {
+  } catch (const char* const s) {
     cerr << s << cerr_endl() << flush;
-  } catch (MyException& e) {
+  } catch (const exception& e) {
     cerr << e.what() << cerr_endl() << flush;
-  } catch (exception& std_exc) {
-    cerr << std_exc.what() << cerr_endl() << flush;
   } catch (...) {
     cerr << "Unknown exception" << cerr_endl() << flush;
   }
