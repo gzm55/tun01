@@ -26,6 +26,7 @@
  * ----- - - -- - - --
  */
 
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -53,6 +54,11 @@
 #include "com/antlersoft/MyException.h"
 #include "com/antlersoft/StderrEndl.h"
 #include "com/antlersoft/Trace.h"
+
+#ifndef MAX
+#  define MAX(x, y) ((x) > (y) ? (x) : (y))
+#  define MIN(x, y) ((x) < (y) ? (x) : (y))
+#endif
 
 using namespace std;
 using namespace com::antlersoft;
@@ -191,25 +197,36 @@ auto parseConnection(ConnectionSpec::Direction direction, char* arg) {
   vector<string> connect_params;
   istringstream input(arg);
   for (string t; getline(input, t, ':'); connect_params.push_back(t));
-
   if (connect_params.size() != 3 && connect_params.size() != 4) {
     throw MY_EXCEPTION(static_cast<stringstream&&>(stringstream() << "Bad connection argument: " << arg));
   }
+
   int listen_port = atoi(connect_params[0].c_str());
   if (listen_port <= 0) {
     throw MY_EXCEPTION(static_cast<stringstream&&>(stringstream() << "Bad listen port: " << connect_params[0].c_str()));
   }
+
   int connect_port = atoi(connect_params[2].c_str());
-  if (connect_port <= 0) {
+  if (connect_port < 0) {
     throw MY_EXCEPTION(
         static_cast<stringstream&&>(stringstream() << "Bad connect port: " << connect_params[2].c_str()));
   }
+
+  if ((connect_params[1].length() == 0 && connect_port != 0) && (connect_params[1].length() > 0 && connect_port == 0)) {
+    throw MY_EXCEPTION(
+        static_cast<stringstream&&>(stringstream() << "Bad connect host or port: " << connect_params[2].c_str()));
+  }
+
   auto result = make_shared<ConnectionSpec>();
   result->m_connection_type = direction;
   result->m_connect_host = connect_params[1];
   result->m_connect_port = connect_port;
   result->m_listen_port = listen_port;
   result->m_flags = 0;
+
+  if (result->isSocks5() && direction != ConnectionSpec::CONNECT) {
+    throw MY_EXCEPTION("socks 5 can only on the remote side");
+  }
 
   if (connect_params.size() == 4) {
     if (connect_params[3].find('a') != string::npos) result->m_flags |= ConnectionSpec::ACK_PACKETS;
@@ -337,6 +354,7 @@ void StdioTunnelLocal::remoteInit(const string& remote_cmd) {
 
 void StdioTunnelLocal::configure(const int argc, char* argv[]) {
   Trace trace("StdioTunnelLocal::configure");
+  int socks5_spec_count = 0;
 
   for (int i = 1; i < argc && nullptr == m_command; ++i) {
     char* arg = argv[i];
@@ -349,6 +367,7 @@ void StdioTunnelLocal::configure(const int argc, char* argv[]) {
           break;
         case 'L':
           m_connection_specs.push_back(parseConnection(ConnectionSpec::CONNECT, long_arg ? arg + 2 : argv[i + 1]));
+          socks5_spec_count += m_connection_specs.back()->isSocks5();
           i += !long_arg;
           break;
         case 'T':
@@ -375,6 +394,7 @@ void StdioTunnelLocal::configure(const int argc, char* argv[]) {
   }
   if (m_connection_specs.size() == 0) throw MY_EXCEPTION("No connections defined");
   if (nullptr == m_command || nullptr == *m_command) throw MY_EXCEPTION("No connection command defined");
+  if (socks5_spec_count > 1) throw MY_EXCEPTION("at most one socks 5 connection spec");
 }
 
 namespace {
@@ -610,6 +630,32 @@ void StdioTunnelRemote::polled(Poller&, pollfd& poll_struct) {
               int id = getReader().readShort();
               auto spec = make_shared<ConnectionSpec>();
               spec->deserialize(getReader());
+
+              if (spec->isSocks5()) {
+                if (m_socks5_server) throw MY_EXCEPTION("should the only one socks5 connection");
+                spec->m_connect_host = "localhost";
+
+                // start socks5 server
+                auto socks5_uninit = make_shared<Socks5Server>();
+                signal(SIGPIPE, SIG_IGN);
+                if (server_setup(socks5_uninit.get(), spec->m_connect_host.c_str(), spec->m_connect_port)) {
+                  throw MY_EXCEPTION("failed to starup socks5 server");
+                }
+                m_socks5_server = std::move(socks5_uninit);
+                if (fcntl(m_socks5_server->fd, F_SETFL, O_NONBLOCK) < 0) throw MY_EXCEPTION_ERRNO;
+
+                // update port
+                sockaddr_in saddr;
+                socklen_t len = sizeof(saddr);
+                if (getsockname(m_socks5_server->fd, (struct sockaddr*)&saddr, &len) != -1) {
+                  spec->m_connect_port = ntohs(saddr.sin_port);
+                } else {
+                  throw MY_EXCEPTION("failed to get socks5 server port");
+                }
+
+                getPoller().addPolled(m_socks5_server->getPolled());
+              }
+
               TunnelConnectionPtr pConn = TunnelConnection::CreateConnection(*this, spec, false, id);
               if (pConn) {
                 m_connection_map[id] = pConn;
@@ -693,6 +739,230 @@ class ConnectSide : public TunnelConnection {
   virtual ~ConnectSide() = default;
   void processMessage(StdioTunnel& tunnel);
 };
+
+void Socks5Server::setPollfd(pollfd& poll_struct) {
+  Trace trace("Socks5Server::setPollfd");
+  poll_struct.fd = fd;
+  poll_struct.events = POLLIN;
+}
+
+#ifdef PTHREAD_STACK_MIN
+#  define THREAD_STACK_SIZE MAX(16 * 1024, PTHREAD_STACK_MIN)
+#else
+#  define THREAD_STACK_SIZE 64 * 1024
+#endif
+
+#if defined(__APPLE__)
+#  undef THREAD_STACK_SIZE
+#  define THREAD_STACK_SIZE 64 * 1024
+#elif defined(__GLIBC__) || defined(__FreeBSD__) || defined(__sun__)
+#  undef THREAD_STACK_SIZE
+#  define THREAD_STACK_SIZE 32 * 1024
+#endif
+
+void Socks5Server::collect() {
+  for (size_t i = 0; i < sblist_getsize(m_threads);) {
+    const auto thread = *((struct thread**)sblist_get(m_threads, i));
+    if (thread->done) {
+      pthread_join(thread->pt, 0);
+      sblist_delete(m_threads, i);
+      free(thread);
+    } else
+      i++;
+  }
+}
+
+static int connect_socks_target(unsigned char* buf, size_t n, client* client) {
+  if (n < 5) return -Socks5Server::EC_GENERAL_FAILURE;
+  if (buf[0] != 5) return -Socks5Server::EC_GENERAL_FAILURE;
+  if (buf[1] != 1) return -Socks5Server::EC_COMMAND_NOT_SUPPORTED; /* we support only CONNECT method */
+  if (buf[2] != 0) return -Socks5Server::EC_GENERAL_FAILURE;       /* malformed packet */
+
+  int af = AF_INET;
+  size_t minlen = 4 + 4 + 2, l;
+  char namebuf[256];
+  struct addrinfo* remote;
+
+  switch (buf[3]) {
+    case 4: /* ipv6 */
+      af = AF_INET6;
+      minlen = 4 + 2 + 16;
+      /* fall through */
+    case 1: /* ipv4 */
+      if (n < minlen) return -Socks5Server::EC_GENERAL_FAILURE;
+      if (namebuf != inet_ntop(af, buf + 4, namebuf, sizeof namebuf))
+        return -Socks5Server::EC_GENERAL_FAILURE; /* malformed or too long addr */
+      break;
+    case 3: /* dns name */
+      l = buf[4];
+      minlen = 4 + 2 + l + 1;
+      if (n < 4 + 2 + l + 1) return -Socks5Server::EC_GENERAL_FAILURE;
+      memcpy(namebuf, buf + 4 + 1, l);
+      namebuf[l] = 0;
+      break;
+    default:
+      return -Socks5Server::EC_ADDRESSTYPE_NOT_SUPPORTED;
+  }
+  unsigned short port;
+  port = (buf[minlen - 2] << 8) | buf[minlen - 1];
+  /* there's no suitable errorcode in rfc1928 for dns lookup failure */
+  if (resolve(namebuf, port, &remote)) return -Socks5Server::EC_GENERAL_FAILURE;
+  int fd = socket(remote->ai_family, SOCK_STREAM, 0);
+  if (fd == -1) {
+  eval_errno:
+    if (fd != -1) close(fd);
+    freeaddrinfo(remote);
+    switch (errno) {
+      case ETIMEDOUT:
+        return -Socks5Server::EC_TTL_EXPIRED;
+      case EPROTOTYPE:
+      case EPROTONOSUPPORT:
+      case EAFNOSUPPORT:
+        return -Socks5Server::EC_ADDRESSTYPE_NOT_SUPPORTED;
+      case ECONNREFUSED:
+        return -Socks5Server::EC_CONN_REFUSED;
+      case ENETDOWN:
+      case ENETUNREACH:
+        return -Socks5Server::EC_NET_UNREACHABLE;
+      case EHOSTUNREACH:
+        return -Socks5Server::EC_HOST_UNREACHABLE;
+      case EBADF:
+      default:
+        cerr << "socks5 socket/connect" << cerr_endl() << flush;
+        return -Socks5Server::EC_GENERAL_FAILURE;
+    }
+  }
+  if (connect(fd, remote->ai_addr, remote->ai_addrlen) == -1) goto eval_errno;
+
+  freeaddrinfo(remote);
+#ifndef CONFIG_LOG
+#  define CONFIG_LOG 1
+#endif
+  if (CONFIG_LOG) {
+    char clientname[256];
+    af = SOCKADDR_UNION_AF(&client->addr);
+    void* ipdata = SOCKADDR_UNION_ADDRESS(&client->addr);
+    inet_ntop(af, ipdata, clientname, sizeof clientname);
+    cerr << "client[" << client->fd << "] " << clientname << ": connected to " << namebuf << ":" << port << cerr_endl()
+         << flush;
+  }
+  return fd;
+}
+static int socks5_handshake(Socks5Server::thread* t) {
+  unsigned char buf[1024];
+  ssize_t n;
+  int ret;
+  t->state = Socks5Server::SS_1_CONNECTED;
+  while ((n = recv(t->client.fd, buf, sizeof buf, 0)) > 0) {
+    switch (t->state) {
+      case Socks5Server::SS_1_CONNECTED:
+        buf[0] = 5;
+        buf[1] = Socks5Server::AM_NO_AUTH;
+        write(t->client.fd, buf, 2);
+        t->state = Socks5Server::SS_3_AUTHED;
+        break;
+      case Socks5Server::SS_2_NEED_AUTH:
+        buf[0] = 1;
+        buf[1] = Socks5Server::EC_SUCCESS;
+        write(t->client.fd, buf, 2);
+        t->state = Socks5Server::SS_3_AUTHED;
+        break;
+      case Socks5Server::SS_3_AUTHED:
+        ret = connect_socks_target(buf, n, &t->client);
+        /* position 4 contains ATYP, the address type, which is the same as used in the connect
+           request. we're lazy and return always IPV4 address type in errors. */
+        buf[0] = 5;
+        buf[1] = ret < 0 ? ret * -1 : Socks5Server::EC_SUCCESS;
+        buf[2] = 0;
+        buf[3] = 1; /*AT_IPV4*/
+        buf[4] = 0;
+        buf[5] = 0;
+        buf[6] = 0;
+        buf[7] = 0;
+        buf[8] = 0;
+        buf[9] = 0;
+        write(t->client.fd, buf, 10);
+        return ret < 0 ? -1 : ret;
+    }
+  }
+  return -1;
+}
+static void copyloop(int fd1, int fd2) {
+  pollfd fds[2] = {
+      [0] = {.fd = fd1, .events = POLLIN},
+      [1] = {.fd = fd2, .events = POLLIN},
+  };
+
+  while (1) {
+    /* inactive connections are reaped after 15 min to free resources.
+       usually programs send keep-alive packets so this should only happen
+       when a connection is really unused. */
+    switch (poll(fds, 2, 60 * 15 * 1000)) {
+      case 0:
+        return;
+      case -1:
+        if (errno == EINTR || errno == EAGAIN)
+          continue;
+        else
+          cerr << "poll" << cerr_endl() << flush;
+        return;
+    }
+    int infd = (fds[0].revents & POLLIN) ? fd1 : fd2;
+    int outfd = infd == fd2 ? fd1 : fd2;
+    /* since the biggest stack consumer in the entire code is
+       libc's getaddrinfo(), we can safely use at least half the
+       available stacksize to improve throughput. */
+    char buf[MIN(16 * 1024, THREAD_STACK_SIZE / 2)];
+    ssize_t sent = 0, n = read(infd, buf, sizeof buf);
+    if (n <= 0) return;
+    while (sent < n) {
+      ssize_t m = write(outfd, buf + sent, n - sent);
+      if (m < 0) return;
+      sent += m;
+    }
+  }
+}
+static void* socks5_clientthread(void* data) {
+  const auto t = (Socks5Server::thread*)data;
+  int remotefd = socks5_handshake(t);
+  if (remotefd != -1) {
+    copyloop(t->client.fd, remotefd);
+    close(remotefd);
+  }
+  close(t->client.fd);
+  t->done = 1;
+  return 0;
+}
+
+void Socks5Server::polled(Poller&, pollfd&) {
+  collect();
+  client c;
+  auto curr = (thread*)malloc(sizeof(struct thread));
+  if (!curr) goto oom;
+  curr->done = 0;
+  if (server_waitclient(this, &c)) {
+    cerr << "failed to accept socks5 connection" << cerr_endl() << flush;
+    free(curr);
+    return;
+  }
+  curr->client = c;
+  if (!sblist_add(m_threads, &curr)) {
+    close(curr->client.fd);
+    free(curr);
+  oom:
+    cerr << "rejecting socks5 connection due to OOM" << cerr_endl() << flush;
+    return;
+  }
+
+  pthread_attr_t *a = nullptr, attr;
+  if (pthread_attr_init(&attr) == 0) {
+    a = &attr;
+    pthread_attr_setstacksize(a, THREAD_STACK_SIZE);
+  }
+  if (pthread_create(&curr->pt, a, socks5_clientthread, curr) != 0)
+    cerr << "pthread_create failed. OOM?" << cerr_endl() << flush;
+  if (a) pthread_attr_destroy(&attr);
+}
 
 TunnelConnection::TunnelConnection(shared_ptr<ConnectionSpec> spec, int id, CustomWriteStream& writer)
     : m_spec(spec), m_id(id), m_writer(writer) {}
@@ -957,7 +1227,8 @@ int main(int argc, char* argv[]) {
            << cerr_endl() << cerr_endl() << "or (on the remote side)" << cerr_endl() << cerr_endl()
            << "StdioTunnel [-D] -r" << cerr_endl() << cerr_endl() << "or (print version)" << cerr_endl() << cerr_endl()
            << "StdioTunnel -V" << cerr_endl() << cerr_endl()
-           << "where connection_spec = <listen port>:<connect host>:<connect port>[:ap]" << cerr_endl() << flush;
+           << "where connection_spec = <listen port>:<connect host>:<connect port>[:ap]" << cerr_endl()
+           << "a remote socks 5 connection_spec is write as -l -L <listen port>::0" << cerr_endl() << flush;
       throw "";
     }
     tunnel->startFinish();

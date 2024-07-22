@@ -18,6 +18,7 @@
  * ----- - - -- - - --
  */
 
+#include <pthread.h>
 #include <termios.h>
 
 #include <map>
@@ -30,6 +31,8 @@
 #include "com/antlersoft/net/ReadStream.h"
 #include "com/antlersoft/net/SockBuffer.h"
 #include "com/antlersoft/net/WriteStream.h"
+#include "microsocks/sblist.h"
+#include "microsocks/server.h"
 
 class CustomWriteStream : public com::antlersoft::net::WriteStream {
  public:
@@ -63,6 +66,7 @@ class ConnectionSpec {
 
   void deserialize(com::antlersoft::net::ReadStream& stream);
   void serialize(com::antlersoft::net::WriteStream& stream);
+  inline bool isSocks5() const noexcept { return m_connect_host.length() == 0 && m_connect_port == 0; }
 };
 
 class StdioTunnel;
@@ -85,8 +89,8 @@ class ConnectionLink : public com::antlersoft::net::Polled {
   void polled(com::antlersoft::net::Poller& poller, pollfd& poll_struct);
   void setPollfd(pollfd& poll_struct);
   void cleanup(pollfd& poll_struct);
-
   com::antlersoft::net::Polled& getPolled() { return *this; }
+
   com::antlersoft::net::SockBuffer& getBuffer() { return m_buffer; }
   int getSocket() { return m_socket; }
   short getID() { return m_id; }
@@ -203,6 +207,48 @@ class MagicStringDetector : public com::antlersoft::net::SockBuffer {
   void setRemoteCmd(const std::string& c) { m_remote_cmd = c; }
 };
 
+class Socks5Server : public server, public com::antlersoft::net::Polled {
+ public:
+  enum socksstate {
+    SS_1_CONNECTED,
+    SS_2_NEED_AUTH, /* skipped if NO_AUTH method supported */
+    SS_3_AUTHED,
+  };
+  enum authmethod { AM_NO_AUTH = 0, AM_GSSAPI = 1, AM_USERNAME = 2, AM_INVALID = 0xFF };
+  enum errorcode {
+    EC_SUCCESS = 0,
+    EC_GENERAL_FAILURE = 1,
+    EC_NOT_ALLOWED = 2,
+    EC_NET_UNREACHABLE = 3,
+    EC_HOST_UNREACHABLE = 4,
+    EC_CONN_REFUSED = 5,
+    EC_TTL_EXPIRED = 6,
+    EC_COMMAND_NOT_SUPPORTED = 7,
+    EC_ADDRESSTYPE_NOT_SUPPORTED = 8,
+  };
+  struct thread {
+    pthread_t pt;
+    client client;
+    enum socksstate state;
+    volatile int done;
+  };
+
+ private:
+  sblist* m_threads;
+
+  void collect();
+
+ public:
+  inline Socks5Server() : m_threads(sblist_new(sizeof(struct thread*), 8)) { fd = 0; }
+  virtual ~Socks5Server() { sblist_free(m_threads); }
+
+  // Polled interface
+  void polled(com::antlersoft::net::Poller& poller, pollfd& poll_struct);
+  void setPollfd(pollfd& poll_struct);
+  inline void cleanup(pollfd& poll_struct) { close(poll_struct.fd); }
+  inline com::antlersoft::net::Polled& getPolled() noexcept { return *this; }
+};
+
 class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
  private:
   enum {
@@ -247,9 +293,10 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
 
 class StdioTunnelRemote : public StdioTunnel, public com::antlersoft::net::Polled {
   enum { INITIAL, SET_STDIO_READ, HANDSHAKING, CONNECTED, SHUT_DOWN } m_state;
+  std::shared_ptr<Socks5Server> m_socks5_server;
 
  public:
-  StdioTunnelRemote() : m_state(INITIAL) {}
+  StdioTunnelRemote() : m_state(INITIAL), m_socks5_server(nullptr) {}
   void start();
   void reportError(std::string message);
   void polled(com::antlersoft::net::Poller& poller, pollfd& poll_struct);
