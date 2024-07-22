@@ -269,6 +269,7 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
   std::vector<std::shared_ptr<ConnectionSpec>> m_connection_specs;
   MagicStringDetector m_read_buffer;
   com::antlersoft::net::SockBuffer m_write_buffer;
+  bool m_daemon;
   friend class MagicStringDetector;
   void startHandshaking();
   void remoteInit(const std::string& remote_cmd);
@@ -284,7 +285,8 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
         m_write_fd(-1),
         m_force_pipe(false),
         m_expects_pipe(false),
-        m_read_buffer(*this, m_magic_string) {}
+        m_read_buffer(*this, m_magic_string),
+        m_daemon(false) {}
   void start();
   void reportError(std::string message);
   void polled(com::antlersoft::net::Poller& poller, pollfd& poll_struct);

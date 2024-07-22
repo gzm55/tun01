@@ -270,6 +270,7 @@ shared_ptr<StdioTunnel> StdioTunnel::CreateTunnel(const int argc, char* argv[]) 
           break;
         case 'T':
         case 't':
+        case 'd':
           break;  // process by configure(...)
         default:
           throw MY_EXCEPTION("Unknown option");
@@ -324,6 +325,28 @@ void MagicStringDetector::processReadData(char* buffer, int& count, int) {
   }
 }
 
+static void daemon() {
+  /* Fork off the parent process */
+  const auto pid = fork();
+
+  /* An error occurred */
+  if (pid < 0) throw MY_EXCEPTION_ERRNO;
+
+  /* Success: Let the parent terminate */
+  if (pid > 0) throw MY_EXCEPTION("exit for daemon");
+
+  /* Catch, ignore and handle signals */
+  signal(SIGCHLD, SIG_IGN);
+  signal(SIGHUP, SIG_IGN);
+
+  /* Set new file permissions */
+  umask(0);
+
+  /* Change the working directory to the root directory */
+  /* or another appropriated directory */
+  chdir("/");
+}
+
 void StdioTunnelLocal::startHandshaking() {
   Trace trace("StdioTunnelLocal::startHandshaking");
   m_state = HAND_SHAKE;
@@ -342,6 +365,10 @@ void StdioTunnelLocal::startHandshaking() {
     cfmakeraw(&enable_sig);
     enable_sig.c_lflag |= ISIG;
     tcsetattr(STDIN_FD, TCSAFLUSH, &enable_sig);
+  }
+  if (m_daemon) {
+    cerr << "Keep running daemon in background ..." << cerr_endl() << flush;
+    daemon();
   }
 }
 
@@ -375,6 +402,9 @@ void StdioTunnelLocal::configure(const int argc, char* argv[]) {
           break;
         case 't':
           m_expects_pipe = true;
+          break;
+        case 'd':
+          m_daemon = true;
           break;
         case 'p':
           m_read_buffer.setLoginPattern(long_arg ? arg + 2 : argv[i + 1]);
@@ -828,7 +858,7 @@ static int connect_socks_target(unsigned char* buf, size_t n, client* client) {
         return -Socks5Server::EC_HOST_UNREACHABLE;
       case EBADF:
       default:
-        cerr << "socks5 socket/connect" << cerr_endl() << flush;
+        // cerr << "socks5 socket/connect" << cerr_endl() << flush;
         return -Socks5Server::EC_GENERAL_FAILURE;
     }
   }
@@ -836,7 +866,7 @@ static int connect_socks_target(unsigned char* buf, size_t n, client* client) {
 
   freeaddrinfo(remote);
 #ifndef CONFIG_LOG
-#  define CONFIG_LOG 1
+#  define CONFIG_LOG 0  // 1
 #endif
   if (CONFIG_LOG) {
     char clientname[256];
@@ -903,8 +933,9 @@ static void copyloop(int fd1, int fd2) {
       case -1:
         if (errno == EINTR || errno == EAGAIN)
           continue;
-        else
-          cerr << "poll" << cerr_endl() << flush;
+        else {
+          // cerr << "poll" << cerr_endl() << flush;
+        }
         return;
     }
     int infd = (fds[0].revents & POLLIN) ? fd1 : fd2;
@@ -941,7 +972,7 @@ void Socks5Server::polled(Poller&, pollfd&) {
   if (!curr) goto oom;
   curr->done = 0;
   if (server_waitclient(this, &c)) {
-    cerr << "failed to accept socks5 connection" << cerr_endl() << flush;
+    // cerr << "failed to accept socks5 connection" << cerr_endl() << flush;
     free(curr);
     return;
   }
@@ -950,7 +981,7 @@ void Socks5Server::polled(Poller&, pollfd&) {
     close(curr->client.fd);
     free(curr);
   oom:
-    cerr << "rejecting socks5 connection due to OOM" << cerr_endl() << flush;
+    // cerr << "rejecting socks5 connection due to OOM" << cerr_endl() << flush;
     return;
   }
 
@@ -959,8 +990,9 @@ void Socks5Server::polled(Poller&, pollfd&) {
     a = &attr;
     pthread_attr_setstacksize(a, THREAD_STACK_SIZE);
   }
-  if (pthread_create(&curr->pt, a, socks5_clientthread, curr) != 0)
-    cerr << "pthread_create failed. OOM?" << cerr_endl() << flush;
+  if (pthread_create(&curr->pt, a, socks5_clientthread, curr) != 0) {
+    // cerr << "pthread_create failed. OOM?" << cerr_endl() << flush;
+  }
   if (a) pthread_attr_destroy(&attr);
 }
 
@@ -1222,8 +1254,8 @@ int main(int argc, char* argv[]) {
       tunnel = StdioTunnel::CreateTunnel(argc, argv);
     } catch (MyException& e) {
       cerr << cerr_endl()
-           << "Usage: StdioTunnel [-D] [-l] [-T|-t] <-L|-R <connection spec>>... [-p login-pattern] [-c remote-cmd] "
-              "connection-command [args...]"
+           << "Usage: StdioTunnel [-D] [-l] [-d] [-T|-t] <-L|-R <connection spec>>... [-p login-pattern] "
+              "[-c remote-cmd] connection-command [args...]"
            << cerr_endl() << cerr_endl() << "or (on the remote side)" << cerr_endl() << cerr_endl()
            << "StdioTunnel [-D] -r" << cerr_endl() << cerr_endl() << "or (print version)" << cerr_endl() << cerr_endl()
            << "StdioTunnel -V" << cerr_endl() << cerr_endl()
