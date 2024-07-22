@@ -858,13 +858,13 @@ static int socks5_handshake(Socks5Server::thread* t) {
       case Socks5Server::SS_1_CONNECTED:
         buf[0] = 5;
         buf[1] = Socks5Server::AM_NO_AUTH;
-        write(t->client.fd, buf, 2);
+        if (write(t->client.fd, buf, 2) != 2) return -1;
         t->state = Socks5Server::SS_3_AUTHED;
         break;
       case Socks5Server::SS_2_NEED_AUTH:
         buf[0] = 1;
         buf[1] = Socks5Server::EC_SUCCESS;
-        write(t->client.fd, buf, 2);
+        if (write(t->client.fd, buf, 2) != 2) return -1;
         t->state = Socks5Server::SS_3_AUTHED;
         break;
       case Socks5Server::SS_3_AUTHED:
@@ -881,7 +881,7 @@ static int socks5_handshake(Socks5Server::thread* t) {
         buf[7] = 0;
         buf[8] = 0;
         buf[9] = 0;
-        write(t->client.fd, buf, 10);
+        if (write(t->client.fd, buf, 10) != 10) return -1;
         return ret < 0 ? -1 : ret;
     }
   }
@@ -889,8 +889,8 @@ static int socks5_handshake(Socks5Server::thread* t) {
 }
 static void copyloop(int fd1, int fd2) {
   pollfd fds[2] = {
-      [0] = {.fd = fd1, .events = POLLIN},
-      [1] = {.fd = fd2, .events = POLLIN},
+      [0] = {.fd = fd1, .events = POLLIN, .revents = 0},
+      [1] = {.fd = fd2, .events = POLLIN, .revents = 0},
   };
 
   while (1) {

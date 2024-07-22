@@ -228,7 +228,7 @@ class Socks5Server : public server, public com::antlersoft::net::Polled {
   };
   struct thread {
     pthread_t pt;
-    client client;
+    ::client client;
     enum socksstate state;
     volatile int done;
   };
