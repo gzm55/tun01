@@ -344,7 +344,7 @@ static void daemon() {
 
   /* Change the working directory to the root directory */
   /* or another appropriated directory */
-  chdir("/");
+  if (chdir("/")) throw MY_EXCEPTION_ERRNO;
 }
 
 void StdioTunnelLocal::startHandshaking() {
