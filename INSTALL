@@ -183,7 +183,7 @@ operates.
 
 New Commands
 =====
-rm -rf build && cmake -B build
+rm -rf build && cmake -B build -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
 cmake --build -t clean
 cmake --build
 find src \( -name '*.hpp' -o -name '*.cc' -o -name '*.h' -o -name '*.cpp' \)  -exec clang-format -i {} \;

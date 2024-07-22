@@ -1,3 +1,5 @@
+set(CMAKE_OSX_ARCHITECTURES x86_64;arm64) # build universal binary on macos
+
 cmake_minimum_required(VERSION 3.13)
 # CMAKE_CXX_STANDARD requires 3.1
 # HOMEPAGE_URL requires 3.12
@@ -142,3 +144,5 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND $<$<CONFIG:Release>:${CMAKE_STRIP}> ARGS $<TARGET_FILE:${PROJECT_NAME}>)
