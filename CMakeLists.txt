@@ -140,7 +140,7 @@ cmake_pop_check_state()
 CONFIGURE_FILE(config.h.cmake ${CMAKE_BINARY_DIR}/include/config.h)
 target_include_directories(${PROJECT_NAME} PRIVATE src ${CMAKE_BINARY_DIR}/include)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  target_link_options(${PROJECT_NAME} PRIVATE -Wl,--as-needed)
+  target_link_options(${PROJECT_NAME} PRIVATE -Wl,--as-needed -static-libgcc -static-libstdc++)
 endif()
 
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
