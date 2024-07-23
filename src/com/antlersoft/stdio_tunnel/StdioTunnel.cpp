@@ -94,6 +94,32 @@ void ConnectionSpec::serialize(WriteStream& stream) {
   stream.writeShort(m_flags);
 }
 
+// 0: bind is ok; 1: already in use; -1: error
+int ConnectionSpec::bindStatus() const noexcept {
+  Trace trace("ConnectionSpec::bindStatus");
+
+  sockaddr_in saddr;
+  saddr.sin_family = AF_INET;
+  if (m_flags & ConnectionSpec::PROMISCUOUS)
+    saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  else
+    saddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+  saddr.sin_port = htons(m_listen_port);
+  const auto s = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (s < 0) return -1;
+  auto rst = -1;
+  if (::bind(s, (const sockaddr*)&saddr, sizeof(saddr)) == 0) {
+    rst = 0;
+  } else if (errno == EADDRINUSE) {
+    rst = 1;
+  }
+  const auto olderr = errno;
+  close(s);
+  errno = olderr;
+  return rst;
+}
+
 void CustomWriteStream::send() {
   Trace trace("CustomWriteStream::send");
   if (!m_poller) {
@@ -271,6 +297,7 @@ shared_ptr<StdioTunnel> StdioTunnel::CreateTunnel(const int argc, char* argv[]) 
         case 'T':
         case 't':
         case 'd':
+        case 's':
           break;  // process by configure(...)
         default:
           throw MY_EXCEPTION("Unknown option");
@@ -333,7 +360,7 @@ static void daemon() {
   if (pid < 0) throw MY_EXCEPTION_ERRNO;
 
   /* Success: Let the parent terminate */
-  if (pid > 0) throw MY_EXCEPTION("exit for daemon");
+  if (pid > 0) throw "Run in daemon.";
 
   /* Catch, ignore and handle signals */
   signal(SIGCHLD, SIG_IGN);
@@ -395,6 +422,11 @@ void StdioTunnelLocal::configure(const int argc, char* argv[]) {
         case 'L':
           m_connection_specs.push_back(parseConnection(ConnectionSpec::CONNECT, long_arg ? arg + 2 : argv[i + 1]));
           socks5_spec_count += m_connection_specs.back()->isSocks5();
+          if (m_silent) {
+            const auto trybind = m_connection_specs.back()->bindStatus();
+            if (trybind < 0) throw MY_EXCEPTION_ERRNO;
+            if (trybind == 1) throw "Already run in background.";
+          }
           i += !long_arg;
           break;
         case 'T':
@@ -405,6 +437,9 @@ void StdioTunnelLocal::configure(const int argc, char* argv[]) {
           break;
         case 'd':
           m_daemon = true;
+          break;
+        case 's':
+          m_silent = true;
           break;
         case 'p':
           m_read_buffer.setLoginPattern(long_arg ? arg + 2 : argv[i + 1]);
@@ -1125,7 +1160,8 @@ bool ListenSide::initialize() {
           result = true;
         }
       }
-    }
+    } else
+      throw MY_EXCEPTION_ERRNO;
   }
   return result;
 }
@@ -1248,13 +1284,14 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, signalHandler);
   signal(SIGTERM, signalHandler);
   signal(SIGQUIT, signalHandler);
+  auto main_result = 0;
   try {
     shared_ptr<StdioTunnel> tunnel;
     try {
       tunnel = StdioTunnel::CreateTunnel(argc, argv);
     } catch (MyException& e) {
       cerr << cerr_endl()
-           << "Usage: StdioTunnel [-D] [-l] [-d] [-T|-t] <-L|-R <connection spec>>... [-p login-pattern] "
+           << "Usage: StdioTunnel [-D] [-l] [-d] [-s] [-T|-t] <-L|-R <connection spec>>... [-p login-pattern] "
               "[-c remote-cmd] connection-command [args...]"
            << cerr_endl() << cerr_endl() << "or (on the remote side)" << cerr_endl() << cerr_endl()
            << "StdioTunnel [-D] -r" << cerr_endl() << cerr_endl() << "or (print version)" << cerr_endl() << cerr_endl()
@@ -1264,14 +1301,18 @@ int main(int argc, char* argv[]) {
       throw "";
     }
     tunnel->startFinish();
+    cerr << "Normal exit" << cerr_endl() << flush;
   } catch (const char* const s) {
-    cerr << s << cerr_endl() << flush;
+    if (nullptr != s && 0 < strlen(s)) {
+      cerr << s << cerr_endl() << flush;
+    }
   } catch (const exception& e) {
     cerr << e.what() << cerr_endl() << flush;
+    main_result = 1;
   } catch (...) {
     cerr << "Unknown exception" << cerr_endl() << flush;
+    main_result = 1;
   }
-  cerr << "Normal exit" << cerr_endl() << flush;
 
-  return 0;
+  return main_result;
 }

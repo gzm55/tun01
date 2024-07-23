@@ -67,6 +67,7 @@ class ConnectionSpec {
   void deserialize(com::antlersoft::net::ReadStream& stream);
   void serialize(com::antlersoft::net::WriteStream& stream);
   inline bool isSocks5() const noexcept { return m_connect_host.length() == 0 && m_connect_port == 0; }
+  int bindStatus() const noexcept;  // 0: bind is ok; 1: already in use; -1: error
 };
 
 class StdioTunnel;
@@ -270,6 +271,7 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
   MagicStringDetector m_read_buffer;
   com::antlersoft::net::SockBuffer m_write_buffer;
   bool m_daemon;
+  bool m_silent;
   friend class MagicStringDetector;
   void startHandshaking();
   void remoteInit(const std::string& remote_cmd);
@@ -286,7 +288,8 @@ class StdioTunnelLocal : public StdioTunnel, com::antlersoft::net::Polled {
         m_force_pipe(false),
         m_expects_pipe(false),
         m_read_buffer(*this, m_magic_string),
-        m_daemon(false) {}
+        m_daemon(false),
+        m_silent(false) {}
   void start();
   void reportError(std::string message);
   void polled(com::antlersoft::net::Poller& poller, pollfd& poll_struct);
